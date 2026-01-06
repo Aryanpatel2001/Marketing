@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Validate commit message format
+# Conventional commits: type(scope): message
+commit_msg=$(cat "$1")
+
+pattern="^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: .{1,100}$"
+
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+  echo "❌ Invalid commit message format!"
+  echo ""
+  echo "Expected format: type(scope): message"
+  echo ""
+  echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert"
+  echo ""
+  echo "Examples:"
+  echo "  feat(auth): add Google OAuth login"
+  echo "  fix(api): resolve database connection timeout"
+  echo "  docs: update README with setup instructions"
+  echo ""
+  exit 1
+fi

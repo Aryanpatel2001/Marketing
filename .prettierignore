@@ -1,0 +1,25 @@
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+.next
+.turbo
+coverage
+
+# Generated files
+*.min.js
+*.min.css
+package-lock.json
+pnpm-lock.yaml
+
+# IDE
+.idea
+.vscode
+
+# Environment files
+.env*
+
+# Other
+*.svg
+*.ico
