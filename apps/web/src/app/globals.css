@@ -140,14 +140,16 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   /* Focus styles */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply ring-ring ring-offset-background outline-none ring-2 ring-offset-2;
   }
 
   /* Selection */
@@ -157,7 +159,7 @@
 
   /* Scrollbar */
   ::-webkit-scrollbar {
-    @apply w-2 h-2;
+    @apply h-2 w-2;
   }
 
   ::-webkit-scrollbar-track {
@@ -185,7 +187,7 @@
 
   /* Gradient text */
   .text-gradient {
-    @apply bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent;
+    @apply from-primary to-primary/60 bg-gradient-to-r bg-clip-text text-transparent;
   }
 
   /* Gradient border */
@@ -194,16 +196,12 @@
   }
 
   .border-gradient::before {
-    content: "";
+    content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(
-      to right,
-      hsl(var(--primary)),
-      hsl(var(--primary) / 0.5)
-    );
+    background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--primary) / 0.5));
     -webkit-mask:
       linear-gradient(#fff 0 0) content-box,
       linear-gradient(#fff 0 0);
@@ -217,7 +215,7 @@
   }
 
   .card-hover:hover {
-    @apply shadow-lg -translate-y-0.5;
+    @apply -translate-y-0.5 shadow-lg;
   }
 
   /* Button hover glow */
@@ -226,13 +224,9 @@
   }
 
   .btn-glow::after {
-    content: "";
+    content: '';
     @apply absolute inset-0 opacity-0 transition-opacity duration-300;
-    background: radial-gradient(
-      circle at center,
-      hsl(var(--primary) / 0.3) 0%,
-      transparent 70%
-    );
+    background: radial-gradient(circle at center, hsl(var(--primary) / 0.3) 0%, transparent 70%);
   }
 
   .btn-glow:hover::after {
@@ -241,12 +235,12 @@
 
   /* Skeleton loader */
   .skeleton {
-    @apply relative overflow-hidden bg-muted;
+    @apply bg-muted relative overflow-hidden;
   }
 
   .skeleton::after {
-    content: "";
-    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    content: '';
+    @apply animate-shimmer absolute inset-0 -translate-x-full;
     background: linear-gradient(
       90deg,
       transparent,
@@ -257,19 +251,19 @@
 
   /* Container sizes */
   .container-sm {
-    @apply max-w-screen-sm mx-auto px-4;
+    @apply mx-auto max-w-screen-sm px-4;
   }
 
   .container-md {
-    @apply max-w-screen-md mx-auto px-4;
+    @apply mx-auto max-w-screen-md px-4;
   }
 
   .container-lg {
-    @apply max-w-screen-lg mx-auto px-4;
+    @apply mx-auto max-w-screen-lg px-4;
   }
 
   .container-xl {
-    @apply max-w-screen-xl mx-auto px-4;
+    @apply mx-auto max-w-screen-xl px-4;
   }
 
   /* Page header */
@@ -308,11 +302,11 @@
 
   /* Gradient backgrounds */
   .bg-gradient-primary {
-    @apply bg-gradient-to-r from-primary to-primary/80;
+    @apply from-primary to-primary/80 bg-gradient-to-r;
   }
 
   .bg-gradient-subtle {
-    @apply bg-gradient-to-b from-background to-muted/30;
+    @apply from-background to-muted/30 bg-gradient-to-b;
   }
 
   /* Pattern background */
@@ -352,14 +346,24 @@
 
   /* Stagger children */
   .stagger-children > * {
-    @apply opacity-0 animate-fade-in;
+    @apply animate-fade-in opacity-0;
   }
 
-  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
-  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
-  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
-  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 50ms;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 100ms;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 150ms;
+  }
+  .stagger-children > *:nth-child(5) {
+    animation-delay: 200ms;
+  }
 }
 
 /* ============================================
@@ -374,7 +378,9 @@
 .page-enter-active {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
 }
 
 .page-exit {
@@ -385,5 +391,354 @@
 .page-exit-active {
   opacity: 0;
   transform: translateY(-10px);
-  transition: opacity 150ms ease-in, transform 150ms ease-in;
+  transition:
+    opacity 150ms ease-in,
+    transform 150ms ease-in;
+}
+
+/* ============================================
+   Premium Contact Page Styles
+   ============================================ */
+
+@layer components {
+  /* Stat Card Gradient Overlays */
+  .stat-card {
+    @apply relative overflow-hidden rounded-2xl p-6 transition-all duration-300;
+    @apply from-card to-card/80 bg-gradient-to-br;
+    @apply border-border/50 border shadow-sm;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background: radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.1) 0%, transparent 50%);
+  }
+
+  .stat-card:hover {
+    @apply border-primary/20 -translate-y-1 shadow-lg;
+  }
+
+  .stat-card:hover::before {
+    @apply opacity-100;
+  }
+
+  .stat-card-icon {
+    @apply flex h-12 w-12 items-center justify-center rounded-xl;
+    @apply from-primary/10 to-primary/5 bg-gradient-to-br;
+    @apply text-primary;
+  }
+
+  /* Status Pills */
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+    @apply transition-all duration-200;
+  }
+
+  .status-pill-active {
+    @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .status-pill-unsubscribed {
+    @apply bg-amber-500/10 text-amber-600 dark:text-amber-400;
+  }
+
+  .status-pill-bounced {
+    @apply bg-rose-500/10 text-rose-600 dark:text-rose-400;
+  }
+
+  .status-pill-complained {
+    @apply bg-red-500/10 text-red-600 dark:text-red-400;
+  }
+
+  /* Avatar */
+  .contact-avatar {
+    @apply flex h-10 w-10 items-center justify-center rounded-full;
+    @apply text-sm font-semibold;
+    @apply from-primary/20 to-primary/10 bg-gradient-to-br;
+    @apply text-primary border-background border-2 shadow-sm;
+  }
+
+  /* Table Row Hover */
+  .contact-row {
+    @apply cursor-pointer transition-all duration-200;
+  }
+
+  .contact-row:hover {
+    @apply bg-muted/50;
+  }
+
+  .contact-row:hover .contact-avatar {
+    @apply scale-105;
+  }
+
+  /* Filter Chip */
+  .filter-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm;
+    @apply bg-primary/10 text-primary border-primary/20 border;
+    @apply cursor-pointer transition-all duration-200;
+  }
+
+  .filter-chip:hover {
+    @apply bg-primary/20;
+  }
+
+  .filter-chip-remove {
+    @apply flex h-4 w-4 items-center justify-center rounded-full;
+    @apply hover:bg-primary/20 transition-colors;
+  }
+
+  /* Search Input Enhanced */
+  .search-input-wrapper {
+    @apply relative;
+  }
+
+  .search-input-wrapper input {
+    @apply h-11 rounded-xl pl-11 pr-4;
+    @apply bg-muted/50 border-transparent;
+    @apply focus:bg-background focus:border-primary/30 focus:ring-primary/20 focus:ring-2;
+    @apply transition-all duration-200;
+  }
+
+  .search-input-wrapper .search-icon {
+    @apply absolute left-4 top-1/2 -translate-y-1/2;
+    @apply text-muted-foreground/60 transition-colors duration-200;
+  }
+
+  .search-input-wrapper:focus-within .search-icon {
+    @apply text-primary;
+  }
+
+  /* Action Button Group */
+  .action-btn-group {
+    @apply bg-muted/50 flex items-center gap-2 rounded-xl p-1;
+  }
+
+  .action-btn {
+    @apply rounded-lg px-4 py-2 text-sm font-medium;
+    @apply transition-all duration-200;
+    @apply hover:bg-background hover:shadow-sm;
+  }
+
+  /* Pagination Modern */
+  .pagination-btn {
+    @apply flex h-9 w-9 items-center justify-center rounded-lg;
+    @apply text-sm font-medium transition-all duration-200;
+    @apply hover:bg-muted;
+  }
+
+  .pagination-btn-active {
+    @apply bg-primary text-primary-foreground shadow-sm;
+    @apply hover:bg-primary/90;
+  }
+
+  /* Empty State */
+  .empty-state-container {
+    @apply flex flex-col items-center justify-center px-4 py-16 text-center;
+  }
+
+  .empty-state-icon {
+    @apply mb-6 h-20 w-20 rounded-2xl;
+    @apply from-muted to-muted/50 bg-gradient-to-br;
+    @apply flex items-center justify-center;
+    @apply text-muted-foreground/50;
+  }
+
+  /* Slide Panel */
+  .slide-panel {
+    @apply fixed inset-y-0 right-0 z-50 w-full max-w-md;
+    @apply bg-background border-l shadow-2xl;
+    @apply transform transition-transform duration-300 ease-out;
+  }
+
+  .slide-panel-backdrop {
+    @apply bg-background/80 fixed inset-0 z-40 backdrop-blur-sm;
+    @apply transition-opacity duration-300;
+  }
+
+  /* Quick Actions */
+  .quick-actions {
+    @apply absolute right-4 top-1/2 -translate-y-1/2;
+    @apply flex items-center gap-1 opacity-0;
+    @apply transition-opacity duration-200;
+  }
+
+  .contact-row:hover .quick-actions {
+    @apply opacity-100;
+  }
+
+  .quick-action-btn {
+    @apply flex h-8 w-8 items-center justify-center rounded-lg;
+    @apply text-muted-foreground hover:text-foreground;
+    @apply hover:bg-muted transition-all duration-200;
+  }
+}
+
+/* Animation Keyframes for Contacts */
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-float-up {
+  animation: float-up 0.5s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
+}
+
+/* ============================================
+   Import Page Animations
+   ============================================ */
+
+/* Confetti falling animation */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.animate-confetti {
+  animation: confetti-fall 5s ease-out forwards;
+}
+
+/* Slow spin for orbiting elements */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* Floating particles */
+@keyframes float-particle {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-10px) scale(1.2);
+    opacity: 1;
+  }
+}
+
+.animate-float-particle {
+  animation: float-particle 2s ease-in-out infinite;
+}
+
+/* Shimmer effect for progress bar */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
+/* Bounce in animation */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+/* Fade in up animation */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+/* Shake animation for errors */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-5px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
 }

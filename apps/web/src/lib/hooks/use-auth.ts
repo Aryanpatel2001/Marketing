@@ -25,7 +25,7 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
     onSuccess: (data) => {
-      login(data.user, data.accessToken, data.refreshToken);
+      login(data.user, data.tokens.accessToken, data.tokens.refreshToken);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast.success('Welcome back!');
       router.push('/dashboard');
@@ -39,7 +39,7 @@ export function useAuth() {
   const registerMutation = useMutation({
     mutationFn: (data: RegisterData) => authApi.register(data),
     onSuccess: (data) => {
-      login(data.user, data.accessToken, data.refreshToken);
+      login(data.user, data.tokens.accessToken, data.tokens.refreshToken);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast.success('Account created successfully!');
       router.push('/onboarding');

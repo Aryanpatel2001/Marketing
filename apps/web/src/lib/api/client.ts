@@ -1,6 +1,13 @@
-import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+// API response wrapper type (from backend TransformInterceptor)
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({
@@ -11,7 +18,7 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 30000,
 });
 
-// Request interceptor
+// Request interceptor - add auth token
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Get token from localStorage
@@ -28,12 +35,23 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// Response interceptor - unwrap data and handle errors
 apiClient.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse<ApiResponse<unknown>>) => {
+    // Unwrap the data from the API response wrapper
+    // Backend returns { success: true, data: <actual_data> }
+    // We want to return just <actual_data> for easier consumption
+    if (
+      response.data &&
+      typeof response.data === 'object' &&
+      'success' in response.data &&
+      'data' in response.data
+    ) {
+      response.data = response.data.data as typeof response.data;
+    }
     return response;
   },
-  async (error: AxiosError) => {
+  async (error: AxiosError<ApiResponse<unknown>>) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
@@ -45,15 +63,16 @@ apiClient.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (refreshToken) {
-          const response = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
-            refreshToken,
-          });
+          const response = await axios.post<
+            ApiResponse<{ accessToken: string; refreshToken: string }>
+          >(`${API_URL}/api/v1/auth/refresh`, { refreshToken });
 
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
+          // Response is wrapped, so access data.data
+          const tokens = response.data.data;
+          localStorage.setItem('accessToken', tokens.accessToken);
+          localStorage.setItem('refreshToken', tokens.refreshToken);
 
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
           return apiClient(originalRequest);
         }
       } catch {

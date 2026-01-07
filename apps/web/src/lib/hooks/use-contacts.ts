@@ -45,13 +45,14 @@ export function useContactLists() {
   });
 }
 
-export function useContactTags() {
-  return useQuery({
-    queryKey: contactKeys.tags,
-    queryFn: contactsApi.getTags,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
+// Tags endpoint doesn't exist yet - this is a placeholder for future implementation
+// export function useContactTags() {
+//   return useQuery({
+//     queryKey: contactKeys.tags,
+//     queryFn: contactsApi.getTags,
+//     staleTime: 5 * 60 * 1000, // 5 minutes
+//   });
+// }
 
 export function useCreateContact() {
   const queryClient = useQueryClient();
@@ -104,10 +105,10 @@ export function useDeleteContacts() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (ids: string[]) => contactsApi.deleteContacts(ids),
-    onSuccess: (_, ids) => {
+    mutationFn: (ids: string[]) => contactsApi.bulkDeleteContacts(ids),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: contactKeys.lists() });
-      toast.success(`${ids.length} contacts deleted successfully`);
+      toast.success(`${result.deleted} contacts deleted successfully`);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));
@@ -119,10 +120,16 @@ export function useImportContacts() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: FormData) => contactsApi.importContacts(data),
+    mutationFn: (data: {
+      contacts: Record<string, unknown>[];
+      duplicateHandling: 'skip' | 'update' | 'create_new';
+      duplicateCheckField: 'email' | 'phone' | 'both';
+      updateExistingTags?: boolean;
+    }) => contactsApi.importContacts(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: contactKeys.lists() });
-      toast.success(`Imported ${result.imported} contacts (${result.errors} errors)`);
+      const message = `Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped`;
+      toast.success(message);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));

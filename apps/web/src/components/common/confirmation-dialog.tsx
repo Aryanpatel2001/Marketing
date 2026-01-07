@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 interface ConfirmationDialogProps {
   open: boolean;
@@ -15,10 +17,12 @@ interface ConfirmationDialogProps {
   title: string;
   description: string;
   confirmLabel?: string;
+  confirmText?: string; // Alias for confirmLabel
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel?: () => void;
   variant?: 'default' | 'destructive';
+  loading?: boolean;
 }
 
 export function ConfirmationDialog({
@@ -26,12 +30,16 @@ export function ConfirmationDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Confirm',
+  confirmLabel,
+  confirmText,
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
   variant = 'default',
+  loading = false,
 }: ConfirmationDialogProps) {
+  const buttonText = confirmText || confirmLabel || 'Confirm';
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -40,16 +48,19 @@ export function ConfirmationDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel} disabled={loading}>
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className={
-              variant === 'destructive'
-                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                : ''
-            }
+            disabled={loading}
+            className={cn(
+              variant === 'destructive' &&
+                'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            )}
           >
-            {confirmLabel}
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {buttonText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
