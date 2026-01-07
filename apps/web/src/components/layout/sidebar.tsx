@@ -31,27 +31,27 @@ const navigation = [
   },
   {
     name: 'Contacts',
-    href: '/dashboard/contacts',
+    href: '/contacts',
     icon: Users,
   },
   {
     name: 'Campaigns',
-    href: '/dashboard/campaigns',
+    href: '/campaigns',
     icon: Send,
   },
   {
     name: 'Templates',
-    href: '/dashboard/templates',
+    href: '/templates',
     icon: FileText,
   },
   {
     name: 'Automations',
-    href: '/dashboard/automations',
+    href: '/automations',
     icon: Zap,
   },
   {
     name: 'Analytics',
-    href: '/dashboard/analytics',
+    href: '/analytics',
     icon: BarChart3,
   },
 ];
@@ -59,17 +59,17 @@ const navigation = [
 const settingsNavigation = [
   {
     name: 'Settings',
-    href: '/dashboard/settings',
+    href: '/settings',
     icon: Settings,
   },
   {
     name: 'Billing',
-    href: '/dashboard/settings/billing',
+    href: '/settings/billing',
     icon: CreditCard,
   },
   {
     name: 'API Keys',
-    href: '/dashboard/settings/api-keys',
+    href: '/settings/api-keys',
     icon: Key,
   },
 ];
@@ -81,19 +81,17 @@ export function DashboardSidebar() {
   return (
     <aside
       className={cn(
-        'relative hidden border-r bg-card transition-all duration-300 lg:flex lg:flex-col',
+        'bg-card relative hidden border-r transition-all duration-300 lg:flex lg:flex-col',
         sidebarCollapsed ? 'w-[70px]' : 'w-64'
       )}
     >
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-4">
         <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <MessageSquare className="h-4 w-4 text-primary-foreground" />
+          <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg">
+            <MessageSquare className="text-primary-foreground h-4 w-4" />
           </div>
-          {!sidebarCollapsed && (
-            <span className="text-lg font-semibold">Marketing</span>
-          )}
+          {!sidebarCollapsed && <span className="text-lg font-semibold">Marketing</span>}
         </Link>
       </div>
 
@@ -143,9 +141,9 @@ export function DashboardSidebar() {
         </nav>
 
         {/* Settings section */}
-        <div className="mt-6 pt-6 border-t">
+        <div className="mt-6 border-t pt-6">
           {!sidebarCollapsed && (
-            <p className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <p className="text-muted-foreground mb-2 px-3 text-xs font-semibold uppercase tracking-wider">
               Settings
             </p>
           )}
@@ -198,7 +196,7 @@ export function DashboardSidebar() {
       <Button
         variant="ghost"
         size="icon"
-        className="absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border bg-background shadow-md"
+        className="bg-background absolute -right-3 top-20 z-10 h-6 w-6 rounded-full border shadow-md"
         onClick={toggleSidebarCollapsed}
       >
         {sidebarCollapsed ? (

@@ -1,41 +1,63 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuthStore } from '@/store';
+import { LoadingSpinner } from '@/components/common';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuthStore();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen flex">
+    <div className="flex min-h-screen">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/90 to-primary items-center justify-center p-12 relative overflow-hidden">
+      <div className="from-primary/90 to-primary relative hidden items-center justify-center overflow-hidden bg-gradient-to-br p-12 lg:flex lg:w-1/2">
         {/* Background pattern */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-10" />
+        <div className="bg-grid-pattern absolute inset-0 opacity-10" />
 
         {/* Decorative circles */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative z-10 max-w-lg text-white">
-          <Link href="/" className="flex items-center gap-3 mb-8">
+          <Link href="/" className="mb-8 flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur" />
             <span className="text-2xl font-bold">Marketing Platform</span>
           </Link>
 
-          <h1 className="text-4xl font-bold mb-6 leading-tight">
+          <h1 className="mb-6 text-4xl font-bold leading-tight">
             Grow your business with multi-channel marketing
           </h1>
 
-          <p className="text-lg text-white/80 mb-8">
-            Create and manage Email, SMS, and WhatsApp campaigns from a single platform.
-            Automate your workflows and reach your customers where they are.
+          <p className="mb-8 text-lg text-white/80">
+            Create and manage Email, SMS, and WhatsApp campaigns from a single platform. Automate
+            your workflows and reach your customers where they are.
           </p>
 
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -47,13 +69,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <span>Free plan available - no credit card required</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -65,13 +82,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <span>Set up in under 5 minutes</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -87,7 +99,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       {/* Right side - Auth forms */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-md">{children}</div>
       </div>
     </div>

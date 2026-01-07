@@ -8,10 +8,10 @@ export default () => ({
   // Database
   database: {
     host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
+    port: parseInt(process.env.DATABASE_PORT || '5433', 10),
     username: process.env.DATABASE_USERNAME || 'postgres',
     password: process.env.DATABASE_PASSWORD || 'postgres',
-    name: process.env.DATABASE_NAME || 'marketing_platform',
+    name: process.env.DATABASE_NAME || 'marketing',
     ssl: process.env.DATABASE_SSL === 'true',
   },
 
@@ -84,7 +84,8 @@ export default () => ({
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/v1/auth/google/callback',
+    callbackUrl:
+      process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/v1/auth/google/callback',
   },
 
   // Rate Limiting

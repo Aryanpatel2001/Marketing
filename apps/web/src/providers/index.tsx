@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'sonner';
 import { useState } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { AuthProvider } from './auth-provider';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -30,14 +31,9 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <TooltipProvider delayDuration={300}>
-          {children}
+          <AuthProvider>{children}</AuthProvider>
         </TooltipProvider>
         <Toaster
           position="top-right"

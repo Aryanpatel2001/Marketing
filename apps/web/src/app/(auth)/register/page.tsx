@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Mail, Lock, User, Building2 } from 'lucide-react';
@@ -44,6 +44,7 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -65,6 +66,7 @@ export default function RegisterPage() {
       email: data.email,
       password: data.password,
       companyName: data.companyName,
+      acceptTerms: data.acceptTerms,
     });
   };
 
@@ -73,9 +75,7 @@ export default function RegisterPage() {
       {/* Header */}
       <div className="space-y-2 text-center lg:text-left">
         <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
-        <p className="text-muted-foreground">
-          Get started with your free account today
-        </p>
+        <p className="text-muted-foreground">Get started with your free account today</p>
       </div>
 
       {/* Google OAuth */}
@@ -106,7 +106,7 @@ export default function RegisterPage() {
           <span className="w-full border-t" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          <span className="bg-background text-muted-foreground px-2">Or continue with</span>
         </div>
       </div>
 
@@ -123,7 +123,7 @@ export default function RegisterPage() {
               {...register('firstName')}
             />
             {errors.firstName && (
-              <p className="text-sm text-destructive">{errors.firstName.message}</p>
+              <p className="text-destructive text-sm">{errors.firstName.message}</p>
             )}
           </div>
 
@@ -136,7 +136,7 @@ export default function RegisterPage() {
               {...register('lastName')}
             />
             {errors.lastName && (
-              <p className="text-sm text-destructive">{errors.lastName.message}</p>
+              <p className="text-destructive text-sm">{errors.lastName.message}</p>
             )}
           </div>
         </div>
@@ -151,9 +151,7 @@ export default function RegisterPage() {
             error={!!errors.email}
             {...register('email')}
           />
-          {errors.email && (
-            <p className="text-sm text-destructive">{errors.email.message}</p>
-          )}
+          {errors.email && <p className="text-destructive text-sm">{errors.email.message}</p>}
         </div>
 
         <div className="space-y-2">
@@ -182,14 +180,12 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {errors.password && (
-            <p className="text-sm text-destructive">{errors.password.message}</p>
-          )}
+          {errors.password && <p className="text-destructive text-sm">{errors.password.message}</p>}
         </div>
 
         <div className="space-y-2">
@@ -206,31 +202,42 @@ export default function RegisterPage() {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
           {errors.confirmPassword && (
-            <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+            <p className="text-destructive text-sm">{errors.confirmPassword.message}</p>
           )}
         </div>
 
         <div className="flex items-start space-x-2">
-          <Checkbox id="acceptTerms" {...register('acceptTerms')} className="mt-1" />
+          <Controller
+            name="acceptTerms"
+            control={control}
+            render={({ field }) => (
+              <Checkbox
+                id="acceptTerms"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+                className="mt-1"
+              />
+            )}
+          />
           <label htmlFor="acceptTerms" className="text-sm leading-relaxed">
             I agree to the{' '}
-            <Link href="/terms" className="font-medium text-primary hover:underline">
+            <Link href="/terms" className="text-primary font-medium hover:underline">
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" className="font-medium text-primary hover:underline">
+            <Link href="/privacy" className="text-primary font-medium hover:underline">
               Privacy Policy
             </Link>
           </label>
         </div>
         {errors.acceptTerms && (
-          <p className="text-sm text-destructive">{errors.acceptTerms.message}</p>
+          <p className="text-destructive text-sm">{errors.acceptTerms.message}</p>
         )}
 
         <Button type="submit" className="w-full" loading={isRegisterPending}>
@@ -239,9 +246,9 @@ export default function RegisterPage() {
       </form>
 
       {/* Footer */}
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-center text-sm">
         Already have an account?{' '}
-        <Link href="/login" className="font-medium text-primary hover:underline">
+        <Link href="/login" className="text-primary font-medium hover:underline">
           Sign in
         </Link>
       </p>

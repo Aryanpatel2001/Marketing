@@ -22,7 +22,7 @@ export const databaseConfig = (configService: ConfigService): TypeOrmModuleOptio
   synchronize: configService.get<string>('nodeEnv') === 'development',
 
   // Logging
-  logging: configService.get<string>('nodeEnv') === 'development' ? ['query', 'error'] : ['error'],
+  logging: ['error'],
 
   // Connection pool settings
   extra: {

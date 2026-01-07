@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 // Configuration
 import configuration from './config/configuration';
@@ -37,7 +38,7 @@ import { HealthModule } from './health/health.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['./apps/api/.env.local', './apps/api/.env', '.env.local', '.env'],
     }),
 
     // Database
@@ -57,6 +58,14 @@ import { HealthModule } from './health/health.module';
           limit: config.get<number>('throttle.limit', 100),
         },
       ],
+    }),
+
+    // Event Emitter for real-time SSE events
+    EventEmitterModule.forRoot({
+      wildcard: true,
+      delimiter: '.',
+      maxListeners: 20,
+      verboseMemoryLeak: true,
     }),
 
     // Feature Modules
