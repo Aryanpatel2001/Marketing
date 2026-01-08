@@ -75,13 +75,13 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
           return apiClient(originalRequest);
         }
-      } catch {
-        // Refresh failed, clear tokens and redirect to login
+      } catch (refreshError) {
+        // Refresh failed, clear tokens
+        console.log('[API] Token refresh failed, clearing tokens');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
+        // Don't redirect here - let the auth provider handle it
+        // This prevents race conditions with the auth flow
       }
     }
 

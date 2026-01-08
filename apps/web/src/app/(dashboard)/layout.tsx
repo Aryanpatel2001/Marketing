@@ -20,7 +20,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     // Only redirect after hydration and loading is complete
     if (isHydrated && !isLoading && !isAuthenticated) {
-      router.push('/login');
+      // Double-check localStorage before redirecting
+      const hasToken = localStorage.getItem('accessToken');
+      if (!hasToken) {
+        console.log('[Dashboard] No auth, redirecting to login');
+        router.push('/login');
+      } else {
+        console.log('[Dashboard] Has token but not authenticated, waiting...');
+      }
     }
   }, [isAuthenticated, isLoading, isHydrated, router]);
 
