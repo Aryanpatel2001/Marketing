@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Configuration
 import configuration from './config/configuration';
@@ -26,8 +27,14 @@ import { SmsModule } from './providers/sms/sms.module';
 import { WhatsappModule } from './providers/whatsapp/whatsapp.module';
 import { StorageModule } from './providers/storage/storage.module';
 
-// Queue Module
-import { QueueModule } from './queue/queue.module';
+// Redis Module (Global)
+import { RedisModule } from './providers/redis/redis.module';
+
+// RabbitMQ Module (Global)
+import { RabbitMQModule } from './providers/queue/queue.module';
+
+// Legacy Queue Module (commented out)
+// import { QueueModule } from './queue/queue.module';
 
 // Health Module
 import { HealthModule } from './health/health.module';
@@ -68,6 +75,9 @@ import { HealthModule } from './health/health.module';
       verboseMemoryLeak: true,
     }),
 
+    // Scheduler for cron jobs (scheduled campaigns)
+    ScheduleModule.forRoot(),
+
     // Feature Modules
     AuthModule,
     UsersModule,
@@ -86,8 +96,11 @@ import { HealthModule } from './health/health.module';
     WhatsappModule,
     StorageModule,
 
-    // Queue Module
-    QueueModule,
+    // Redis Module (Global - for caching and counters)
+    RedisModule,
+
+    // RabbitMQ Module (Global - for queue-based sending)
+    RabbitMQModule,
 
     // Health Check
     HealthModule,

@@ -11,8 +11,8 @@ export function slugify(text: string): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^\w\-]+/g, '')
-    .replace(/\-\-+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
     .replace(/^-+/, '')
     .replace(/-+$/, '');
 }
@@ -309,14 +309,20 @@ export function isValidUuid(value: string): boolean {
  */
 export function containsUnicode(text: string): boolean {
   // GSM 7-bit charset (basic characters that don't need unicode)
-  const gsm7bitChars = /^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-.\/0-9:;<=>?¡A-ZÄÖÑܧ¿a-zäöñüà\^{}\[~\]|€]*$/;
+  // eslint-disable-next-line no-useless-escape
+  const gsm7bitChars =
+    /^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-.\/0-9:;<=>?¡A-ZÄÖÑܧ¿a-zäöñüà\^{}\[~\]|€]*$/;
   return !gsm7bitChars.test(text);
 }
 
 /**
  * Calculate SMS parts count
  */
-export function calculateSmsParts(text: string): { parts: number; charsPerPart: number; totalChars: number } {
+export function calculateSmsParts(text: string): {
+  parts: number;
+  charsPerPart: number;
+  totalChars: number;
+} {
   const isUnicode = containsUnicode(text);
   const totalChars = text.length;
 

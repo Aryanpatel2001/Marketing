@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires, no-console */
 const amqp = require('amqplib');
 
 const url = 'amqp://guest:guest@127.0.0.1:5672';

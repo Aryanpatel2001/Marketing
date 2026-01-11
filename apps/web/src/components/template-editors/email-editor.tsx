@@ -3,7 +3,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
-import type { EditorRef } from 'react-email-editor';
 import html2canvas from 'html2canvas';
 
 // Dynamically import EmailEditor to avoid SSR issues
@@ -85,8 +84,8 @@ export function EmailEditor({
   minHeight = 600,
   editorRef,
 }: EmailEditorProps) {
-  const emailEditorRef = useRef<EditorRef | null>(null);
-  const unlayerEditorRef = useRef<any>(null); // Store the actual unlayer editor instance
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unlayerEditorRef = useRef<any>(null); // Store the actual unlayer editor instance from onReady callback
   const [isEditorReady, setIsEditorReady] = useState(false);
   const hasLoadedInitialDesign = useRef(false);
 
@@ -219,7 +218,6 @@ export function EmailEditor({
   return (
     <div className="overflow-hidden rounded-lg border">
       <EmailEditorComponent
-        ref={emailEditorRef}
         onReady={handleReady}
         onLoad={handleLoad}
         minHeight={minHeight}
