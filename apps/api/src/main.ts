@@ -11,6 +11,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -35,8 +36,19 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api/v1', {
-    exclude: ['health', 'docs'],
+    exclude: ['health', 'docs', 'uploads/(.*)'],
   });
+
+  // Serve static files from uploads directory with CORS headers
+  app.use(
+    '/uploads',
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    },
+    express.static(path.join(process.cwd(), 'uploads'))
+  );
 
   // Validation
   app.useGlobalPipes(
