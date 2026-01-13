@@ -81,6 +81,13 @@ export class CampaignMessage extends TenantBaseEntity {
   @Column({ name: 'retry_count', type: 'integer', default: 0 })
   retryCount: number;
 
+  // SMS specific fields
+  @Column({ type: 'decimal', precision: 10, scale: 4, nullable: true })
+  cost: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  segments: number | null;
+
   // Rendered content (after variable replacement)
   @Column({ name: 'rendered_content', type: 'jsonb', nullable: true })
   renderedContent: Record<string, unknown> | null;

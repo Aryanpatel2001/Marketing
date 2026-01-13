@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, LessThanOrEqual, Repository } from 'typeorm';
 import { CampaignMessage, MessageStatus } from '../entities/campaign-message.entity';
 
-import { Campaign, CampaignStatus } from '../entities/campaign.entity';
+import { Campaign, CampaignStatus, CampaignType } from '../entities/campaign.entity';
 import { CampaignSendService } from './campaign-send.service';
 
 // Helper to get supported timezones (ES2022 Intl.supportedValuesOf may not be available)
@@ -197,13 +197,23 @@ export class CampaignSchedulerService implements OnModuleInit {
     this.logger.log(`[PRE-PROCESSING] Triggering dry-run for campaign ${campaign.id}`);
 
     try {
-      // Publish to prepare queue with isDryRun: true
-      await this.queueService.publishEmailPrepare({
-        campaignId: campaign.id,
-        tenantId: campaign.tenantId,
-        batchSize: 100,
-        isDryRun: true,
-      });
+      if (campaign.type === CampaignType.EMAIL) {
+        // Publish to prepare queue with isDryRun: true
+        await this.queueService.publishEmailPrepare({
+          campaignId: campaign.id,
+          tenantId: campaign.tenantId,
+          batchSize: 100,
+          isDryRun: true,
+        });
+      } else if (campaign.type === CampaignType.SMS) {
+        // Publish to SMS prepare queue with isDryRun: true
+        await this.queueService.publishSmsPrepare({
+          campaignId: campaign.id,
+          tenantId: campaign.tenantId,
+          batchSize: 100,
+          isDryRun: true,
+        });
+      }
 
       // Update status to prevent re-triggering
       await this.campaignRepository.update(campaign.id, {
@@ -368,12 +378,14 @@ export class CampaignSchedulerService implements OnModuleInit {
 
       this.logger.warn(`Found ${stuckMessages.length} stuck messages. Attempting recovery...`);
 
-      const sendMessages: any[] = [];
+      const stuckEmailMessages: any[] = [];
+      const stuckSmsMessages: any[] = [];
+
       for (const message of stuckMessages) {
         // Skip if campaign is cancelled or failed
         const campaign = await this.campaignRepository.findOne({
           where: { id: message.campaignId },
-          select: ['status'],
+          select: ['status', 'type'],
         });
 
         if (
@@ -383,24 +395,41 @@ export class CampaignSchedulerService implements OnModuleInit {
           continue;
         }
 
-        if (!message.contact?.email) continue;
-
-        sendMessages.push({
-          campaignId: message.campaignId,
-          tenantId: message.tenantId,
-          messageId: message.id,
-          contactId: message.contactId,
-          email: message.contact.email,
-          firstName: message.contact.firstName || undefined,
-          lastName: message.contact.lastName || undefined,
-          customFields: message.contact.customFields || undefined,
-          attempt: message.retryCount + 1,
-        });
+        if (campaign.type === CampaignType.EMAIL && message.contact?.email) {
+          stuckEmailMessages.push({
+            campaignId: message.campaignId,
+            tenantId: message.tenantId,
+            messageId: message.id,
+            contactId: message.contactId,
+            email: message.contact.email,
+            firstName: message.contact.firstName || undefined,
+            lastName: message.contact.lastName || undefined,
+            customFields: message.contact.customFields || undefined,
+            attempt: message.retryCount + 1,
+          });
+        } else if (campaign.type === CampaignType.SMS && message.recipientPhone) {
+          stuckSmsMessages.push({
+            campaignId: message.campaignId,
+            tenantId: message.tenantId,
+            messageId: message.id,
+            contactId: message.contactId,
+            phoneNumber: message.recipientPhone,
+            firstName: message.contact?.firstName || undefined,
+            lastName: message.contact?.lastName || undefined,
+            customFields: message.contact?.customFields || undefined,
+            attempt: message.retryCount + 1,
+          });
+        }
       }
 
-      if (sendMessages.length > 0) {
-        await this.queueService.publishEmailSendBatch(sendMessages);
-        this.logger.log(`Recovered and re-queued ${sendMessages.length} messages`);
+      if (stuckEmailMessages.length > 0) {
+        await this.queueService.publishEmailSendBatch(stuckEmailMessages);
+        this.logger.log(`Recovered and re-queued ${stuckEmailMessages.length} email messages`);
+      }
+
+      if (stuckSmsMessages.length > 0) {
+        await this.queueService.publishSmsSendBatch(stuckSmsMessages);
+        this.logger.log(`Recovered and re-queued ${stuckSmsMessages.length} SMS messages`);
       }
     } catch (error: any) {
       this.logger.error(`Error recovering stuck messages: ${error.message}`, error.stack);

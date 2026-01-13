@@ -1,21 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useTheme } from 'next-themes';
-import { useAuthStore, useUIStore } from '@/store';
-import { useAuth } from '@/lib/hooks';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import {
   CommandDialog,
   CommandEmpty,
@@ -25,19 +11,31 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import {
-  Search,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/lib/hooks';
+import { getInitials } from '@/lib/utils';
+import { useAuthStore, useUIStore } from '@/store';
+import {
   Bell,
-  Sun,
-  Moon,
-  Menu,
-  User,
-  Settings,
-  LogOut,
   CreditCard,
   HelpCircle,
+  LogOut,
   Mail,
+  Menu,
+  Moon,
+  Search,
+  Settings,
+  Sun,
+  User,
 } from 'lucide-react';
-import { getInitials } from '@/lib/utils';
+import { useTheme } from 'next-themes';
+import Link from 'next/link';
 
 export function DashboardHeader() {
   const { user } = useAuthStore();
@@ -49,7 +47,7 @@ export function DashboardHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4 sm:px-6">
+      <header className="bg-background sticky top-0 z-40 flex h-16 items-center gap-4 border-b px-4 sm:px-6">
         {/* Mobile menu button */}
         <Button
           variant="ghost"
@@ -65,13 +63,13 @@ export function DashboardHeader() {
           <div className="relative max-w-md">
             <Button
               variant="outline"
-              className="w-full justify-start text-sm text-muted-foreground sm:pr-12 md:w-64"
+              className="text-muted-foreground w-full justify-start text-sm sm:pr-12 md:w-64"
               onClick={() => setCommandPaletteOpen(true)}
             >
               <Search className="mr-2 h-4 w-4" />
               <span className="hidden md:inline">Search...</span>
               <span className="md:hidden">Search</span>
-              <kbd className="pointer-events-none absolute right-1.5 top-1.5 hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs font-medium opacity-100 sm:flex">
+              <kbd className="bg-muted pointer-events-none absolute right-1.5 top-1.5 hidden h-6 select-none items-center gap-1 rounded border px-1.5 font-mono text-xs font-medium opacity-100 sm:flex">
                 <span className="text-xs">⌘</span>K
               </kbd>
             </Button>
@@ -94,7 +92,7 @@ export function DashboardHeader() {
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
+            <span className="bg-destructive absolute right-1 top-1 h-2 w-2 rounded-full" />
             <span className="sr-only">Notifications</span>
           </Button>
 
@@ -112,24 +110,24 @@ export function DashboardHeader() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">{userFullName}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                  <p className="text-muted-foreground text-xs leading-none">{user?.email}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings">
+                <Link href="/settings">
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings/billing">
+                <Link href="/settings/billing">
                   <CreditCard className="mr-2 h-4 w-4" />
                   Billing
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings">
+                <Link href="/settings">
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </Link>
@@ -174,21 +172,11 @@ export function DashboardHeader() {
             </CommandItem>
           </CommandGroup>
           <CommandGroup heading="Navigation">
-            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>
-              Dashboard
-            </CommandItem>
-            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>
-              Contacts
-            </CommandItem>
-            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>
-              Campaigns
-            </CommandItem>
-            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>
-              Analytics
-            </CommandItem>
-            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>
-              Settings
-            </CommandItem>
+            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>Dashboard</CommandItem>
+            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>Contacts</CommandItem>
+            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>Campaigns</CommandItem>
+            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>Analytics</CommandItem>
+            <CommandItem onSelect={() => setCommandPaletteOpen(false)}>Settings</CommandItem>
           </CommandGroup>
         </CommandList>
       </CommandDialog>

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { parsePhoneNumber } from 'libphonenumber-js';
+import { CountryCode, parsePhoneNumber } from 'libphonenumber-js';
 import {
   PhoneValidationResult,
   RetryOptions,
@@ -127,7 +127,7 @@ export class SmsService {
    */
   validatePhoneNumber(phone: string, defaultCountry?: string): PhoneValidationResult {
     try {
-      const phoneNumber = parsePhoneNumber(phone, defaultCountry);
+      const phoneNumber = parsePhoneNumber(phone, defaultCountry as CountryCode);
 
       if (!phoneNumber.isValid()) {
         return {

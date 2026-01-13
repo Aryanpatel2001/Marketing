@@ -1,6 +1,6 @@
 export interface SendSmsOptions {
   to: string; // E.164 format: +1234567890
-  from: string; // Sender ID or phone number
+  from?: string; // Sender ID or phone number
   message: string;
   statusCallback?: string; // Webhook URL for delivery receipts
   metadata?: Record<string, string>;

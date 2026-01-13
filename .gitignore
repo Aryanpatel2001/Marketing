@@ -57,6 +57,5 @@ Thumbs.db
 
 # Sentry
 .sentryclirc
-/docs
-*.md
+
 /.claude

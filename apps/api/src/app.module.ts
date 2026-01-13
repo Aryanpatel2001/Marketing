@@ -1,31 +1,32 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 // Configuration
 import configuration from './config/configuration';
 import { databaseConfig } from './config/database.config';
 
 // Feature Modules
-import { AuthModule } from './modules/auth/auth.module';
-import { UsersModule } from './modules/users/users.module';
-import { TenantsModule } from './modules/tenants/tenants.module';
-import { ContactsModule } from './modules/contacts/contacts.module';
-import { CampaignsModule } from './modules/campaigns/campaigns.module';
-import { TemplatesModule } from './modules/templates/templates.module';
-import { BillingModule } from './modules/billing/billing.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
-import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
+import { TemplatesModule } from './modules/templates/templates.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
+import { UsersModule } from './modules/users/users.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { SmsModule as SmsSendersModule } from './modules/sms/sms.module';
 
 // Provider Modules
 import { EmailModule } from './providers/email/email.module';
 import { SmsModule } from './providers/sms/sms.module';
-import { WhatsappModule } from './providers/whatsapp/whatsapp.module';
 import { StorageModule } from './providers/storage/storage.module';
+import { WhatsappModule } from './providers/whatsapp/whatsapp.module';
 
 // Redis Module (Global)
 import { RedisModule } from './providers/redis/redis.module';
@@ -85,10 +86,11 @@ import { HealthModule } from './health/health.module';
     ContactsModule,
     CampaignsModule,
     TemplatesModule,
-    BillingModule,
     AnalyticsModule,
     WebhooksModule,
     ApiKeysModule,
+    BillingModule,
+    SmsSendersModule,
 
     // Provider Modules
     EmailModule,

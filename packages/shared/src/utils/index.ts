@@ -311,7 +311,7 @@ export function containsUnicode(text: string): boolean {
   // GSM 7-bit charset (basic characters that don't need unicode)
   // eslint-disable-next-line no-useless-escape
   const gsm7bitChars =
-    /^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-.\/0-9:;<=>?¡A-ZÄÖÑܧ¿a-zäöñüà\^{}\[~\]|€]*$/;
+    /^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&'()*+,\-./0-9:;<=>?¡A-ZÄÖÑܧ¿a-zäöñüà^{}[~\]|€]*$/;
   return !gsm7bitChars.test(text);
 }
 

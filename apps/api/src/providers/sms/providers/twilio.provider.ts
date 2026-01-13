@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { parsePhoneNumber, PhoneNumber } from 'libphonenumber-js';
+import { CountryCode, parsePhoneNumber, PhoneNumber } from 'libphonenumber-js';
 import Twilio from 'twilio';
 import {
   DeliveryStatus,
@@ -37,10 +37,11 @@ export class TwilioProvider extends SmsProvider {
   constructor(private readonly configService: ConfigService) {
     super();
 
-    this.accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
-    this.authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
-    this.phoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
-    this.messagingServiceSid = this.configService.get<string>('TWILIO_MESSAGING_SERVICE_SID');
+    this.accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID') || null;
+    this.authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN') || null;
+    this.phoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER') || null;
+    this.messagingServiceSid =
+      this.configService.get<string>('TWILIO_MESSAGING_SERVICE_SID') || null;
 
     this.isConfigured = !!(this.accountSid && this.authToken);
 
@@ -167,7 +168,7 @@ export class TwilioProvider extends SmsProvider {
     defaultCountry?: string
   ): Promise<PhoneValidationResult> {
     try {
-      const phoneNumber: PhoneNumber = parsePhoneNumber(phone, defaultCountry);
+      const phoneNumber: PhoneNumber = parsePhoneNumber(phone, defaultCountry as CountryCode);
 
       if (!phoneNumber.isValid()) {
         return {

@@ -1,13 +1,13 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tenant, SubscriptionPlan, TenantStatus } from './entities/tenant.entity';
+import { SubscriptionPlan, Tenant, TenantStatus } from './entities/tenant.entity';
 
 @Injectable()
 export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
-    private readonly tenantRepository: Repository<Tenant>,
+    private readonly tenantRepository: Repository<Tenant>
   ) {}
 
   async create(data: { name: string; slug?: string; billingEmail?: string }): Promise<Tenant> {
@@ -54,6 +54,10 @@ export class TenantsService {
     return this.tenantRepository.findOne({ where: { slug } });
   }
 
+  async findByStripeCustomerId(stripeCustomerId: string): Promise<Tenant | null> {
+    return this.tenantRepository.findOne({ where: { stripeCustomerId } });
+  }
+
   async update(id: string, data: Partial<Tenant>): Promise<Tenant> {
     const tenant = await this.findById(id);
     if (!tenant) {
@@ -67,7 +71,7 @@ export class TenantsService {
   async updateStripeIds(
     id: string,
     stripeCustomerId: string,
-    stripeSubscriptionId?: string,
+    stripeSubscriptionId?: string
   ): Promise<Tenant> {
     return this.update(id, {
       stripeCustomerId,

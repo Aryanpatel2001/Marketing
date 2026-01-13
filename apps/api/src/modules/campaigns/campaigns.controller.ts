@@ -238,6 +238,33 @@ export class CampaignsController {
     return this.campaignSendService.sendTestEmail(tenantId, id, body.email);
   }
 
+  @Post(':id/test/sms')
+  @ApiOperation({ summary: 'Send a test SMS for the campaign' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        phone: {
+          type: 'string',
+          description: 'Phone number to send test to (E.164 format)',
+          example: '+1234567890',
+        },
+      },
+      required: ['phone'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Test SMS sent' })
+  @ApiResponse({ status: 400, description: 'Invalid phone or campaign type' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async sendTestSms(
+    @CurrentTenant() tenantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { phone: string }
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.campaignSendService.sendTestSms(tenantId, id, body.phone);
+  }
+
   // ==================== STATS & ANALYTICS ====================
 
   @Get(':id/stats')

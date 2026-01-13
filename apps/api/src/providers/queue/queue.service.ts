@@ -10,10 +10,15 @@ import {
   EXCHANGES,
   QUEUES,
   ROUTING_KEYS,
+  SmsBatchMessage,
+  SmsPrepareMessage,
+  SmsRetryMessage,
+  SmsSendMessage,
   StatsSyncMessage,
   TrackingBulkMessage,
   TrackingEventMessage,
   WebhookSESMessage,
+  WebhookTwilioMessage,
 } from './queue.constants';
 
 export interface PublishOptions {
@@ -318,15 +323,38 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   /**
    * Publish SMS campaign prepare message
    */
-  async publishSmsPrepare(message: EmailPrepareMessage): Promise<boolean> {
+  async publishSmsPrepare(message: SmsPrepareMessage): Promise<boolean> {
     return this.publish(EXCHANGES.CAMPAIGNS.name, ROUTING_KEYS.SMS_PREPARE, message);
   }
 
   /**
    * Publish single SMS send message
    */
-  async publishSmsSend(message: EmailSendMessage): Promise<boolean> {
+  async publishSmsSend(message: SmsSendMessage): Promise<boolean> {
     return this.publish(EXCHANGES.CAMPAIGNS.name, ROUTING_KEYS.SMS_SEND, message);
+  }
+
+  /**
+   * Publish batch SMS send message
+   */
+  async publishSmsBatch(message: SmsBatchMessage): Promise<boolean> {
+    return this.publish(EXCHANGES.CAMPAIGNS.name, ROUTING_KEYS.SMS_BATCH, message);
+  }
+
+  /**
+   * Publish SMS retry message
+   */
+  async publishSmsRetry(message: SmsRetryMessage, delayMs?: number): Promise<boolean> {
+    return this.publish(EXCHANGES.CAMPAIGNS.name, ROUTING_KEYS.SMS_RETRY, message, {
+      delay: delayMs,
+    });
+  }
+
+  /**
+   * Publish failed SMS message
+   */
+  async publishSmsFailed(message: SmsRetryMessage): Promise<boolean> {
+    return this.publish(EXCHANGES.CAMPAIGNS.name, ROUTING_KEYS.SMS_FAILED, message);
   }
 
   // ==================== WhatsApp Operations ====================
@@ -374,7 +402,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   /**
    * Publish Twilio webhook notification
    */
-  async publishTwilioWebhook(message: any): Promise<boolean> {
+  async publishTwilioWebhook(message: WebhookTwilioMessage): Promise<boolean> {
     return this.publish(EXCHANGES.EVENTS.name, ROUTING_KEYS.WEBHOOK_TWILIO, message);
   }
 
@@ -496,6 +524,21 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       messages.map((message) => ({
         exchange: EXCHANGES.CAMPAIGNS.name,
         routingKey: ROUTING_KEYS.EMAIL_SEND,
+        message,
+      }))
+    );
+  }
+
+  /**
+   * Publish multiple SMS send messages in batch
+   */
+  async publishSmsSendBatch(
+    messages: SmsSendMessage[]
+  ): Promise<{ success: number; failed: number }> {
+    return this.publishBatch(
+      messages.map((message) => ({
+        exchange: EXCHANGES.CAMPAIGNS.name,
+        routingKey: ROUTING_KEYS.SMS_SEND,
         message,
       }))
     );

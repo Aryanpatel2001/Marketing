@@ -1,9 +1,6 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,7 +9,6 @@ import {
   Clock,
   ExternalLink,
   FileText,
-  Loader2,
   Mail,
   MessageSquare,
   PenLine,
@@ -22,14 +18,16 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -37,8 +35,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
+import { SenderIdSelector } from '@/components/campaigns/sms/sender-id-selector';
+import { SmsCostEstimator } from '@/components/campaigns/sms/sms-cost-estimator';
+import { SmsMessageEditor } from '@/components/campaigns/sms/sms-message-editor';
 import {
   CampaignType,
   CreateCampaignData,
@@ -46,8 +48,8 @@ import {
   SmsContent,
   campaignsApi,
 } from '@/lib/api/campaigns';
-import { templatesApi, Template } from '@/lib/api/templates';
 import { contactsApi } from '@/lib/api/contacts';
+import { Template, templatesApi } from '@/lib/api/templates';
 
 // Step configuration
 const steps = [
@@ -656,49 +658,33 @@ export default function NewCampaignPage() {
 
               {/* SMS Content */}
               {state.type === 'sms' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="senderId">Sender ID (Optional)</Label>
-                    <Input
-                      id="senderId"
-                      placeholder="COMPANY"
-                      maxLength={11}
-                      value={state.smsContent.senderId}
-                      onChange={(e) =>
-                        updateState({
-                          smsContent: { ...state.smsContent, senderId: e.target.value },
-                        })
-                      }
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      Maximum 11 characters, alphanumeric only
-                    </p>
-                  </div>
+                <div className="space-y-6">
+                  <SenderIdSelector
+                    value={state.smsContent.senderId || ''}
+                    onChange={(value) =>
+                      updateState({
+                        smsContent: { ...state.smsContent, senderId: value },
+                      })
+                    }
+                  />
 
-                  <div className="space-y-2">
-                    <Label htmlFor="message">Message *</Label>
-                    <Textarea
-                      id="message"
-                      placeholder="Enter your SMS message..."
-                      value={state.smsContent.message}
-                      onChange={(e) =>
-                        updateState({
-                          smsContent: { ...state.smsContent, message: e.target.value },
-                        })
+                  <SmsMessageEditor
+                    value={state.smsContent.message}
+                    onChange={(value) =>
+                      updateState({
+                        smsContent: { ...state.smsContent, message: value },
+                      })
+                    }
+                  />
+
+                  {state.smsContent.message && (
+                    <SmsCostEstimator
+                      message={state.smsContent.message}
+                      recipientCount={
+                        state.audienceType === 'all' ? 1000 : state.contactListIds.length
                       }
-                      rows={6}
                     />
-                    <div className="flex items-center justify-between text-xs">
-                      <p className="text-muted-foreground">
-                        Use variables like {'{{first_name}}'} for personalization
-                      </p>
-                      <p className="text-muted-foreground">
-                        {getSmsSegments(state.smsContent.message).chars} characters •{' '}
-                        {getSmsSegments(state.smsContent.message).segments} segment(s)
-                        {getSmsSegments(state.smsContent.message).hasUnicode && ' • Unicode'}
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 

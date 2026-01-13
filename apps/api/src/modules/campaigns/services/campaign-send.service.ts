@@ -4,13 +4,20 @@ import { EmailService, SendEmailOptions } from '@/providers/email/email.service'
 import { QueueService } from '@/providers/queue/queue.service';
 import { RedisCacheService } from '@/providers/redis/redis-cache.service';
 import { RedisCounterService } from '@/providers/redis/redis-counter.service';
+import { SmsService } from '@/providers/sms/sms.service';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { CampaignEvent, EventType } from '../entities/campaign-event.entity';
 import { CampaignMessage, MessageStatus } from '../entities/campaign-message.entity';
-import { Campaign, CampaignStatus, CampaignType, EmailContent } from '../entities/campaign.entity';
+import {
+  Campaign,
+  CampaignStatus,
+  CampaignType,
+  EmailContent,
+  SmsContent,
+} from '../entities/campaign.entity';
 import { EmailTrackingService } from './email-tracking.service';
 
 /**
@@ -43,6 +50,7 @@ const BLOCKED_EMAIL_DOMAINS = [
   'trashmail.com',
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface SendProgress {
   campaignId: string;
   total: number;
@@ -73,7 +81,8 @@ export class CampaignSendService {
     private readonly queueService: QueueService,
     private readonly counterService: RedisCounterService,
     private readonly cacheService: RedisCacheService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly smsService: SmsService
   ) {
     // Check if queue-based sending is enabled (handle string 'true')
     const queuedSendingValue = this.configService.get<string>('USE_QUEUED_SENDING', 'false');
@@ -118,16 +127,29 @@ export class CampaignSendService {
    * Send campaign using queue-based approach (scalable)
    */
   private async sendCampaignQueued(campaign: Campaign): Promise<Campaign> {
-    this.logger.log(
-      `[CAMPAIGN QUEUED] ID: ${campaign.id} | Publishing to email.prepare.queue | Timestamp: ${new Date().toISOString()}`
-    );
+    if (campaign.type === CampaignType.EMAIL) {
+      this.logger.log(
+        `[CAMPAIGN QUEUED] ID: ${campaign.id} | Publishing to email.prepare.queue | Timestamp: ${new Date().toISOString()}`
+      );
 
-    // Publish to prepare queue - workers will handle the rest
-    await this.queueService.publishEmailPrepare({
-      campaignId: campaign.id,
-      tenantId: campaign.tenantId,
-      batchSize: 100,
-    });
+      // Publish to prepare queue - workers will handle the rest
+      await this.queueService.publishEmailPrepare({
+        campaignId: campaign.id,
+        tenantId: campaign.tenantId,
+        batchSize: 100,
+      });
+    } else if (campaign.type === CampaignType.SMS) {
+      this.logger.log(
+        `[CAMPAIGN QUEUED] ID: ${campaign.id} | Publishing to sms.prepare.queue | Timestamp: ${new Date().toISOString()}`
+      );
+
+      // Publish to SMS prepare queue
+      await this.queueService.publishSmsPrepare({
+        campaignId: campaign.id,
+        tenantId: campaign.tenantId,
+        batchSize: 100,
+      });
+    }
 
     // Return campaign - status will be updated by workers
     return campaign;
@@ -399,9 +421,11 @@ export class CampaignSendService {
 
       if (campaign.type === CampaignType.EMAIL) {
         return await this.sendEmailMessage(campaign, message);
+      } else if (campaign.type === CampaignType.SMS) {
+        return await this.sendSmsMessage(campaign, message);
       }
 
-      // SMS and WhatsApp will be implemented in Phase 4 and 5
+      // WhatsApp will be implemented in Phase 6
       return { success: false, error: 'Channel not implemented' };
     } catch (error: any) {
       await this.messageRepository.update(message.id, {
@@ -412,6 +436,97 @@ export class CampaignSendService {
 
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Send an SMS message
+   */
+  private async sendSmsMessage(
+    campaign: Campaign,
+    message: CampaignMessage
+  ): Promise<{ success: boolean; error?: string }> {
+    const content = campaign.content as SmsContent;
+    const contact = message.contact;
+
+    if (!message.recipientPhone) {
+      await this.messageRepository.update(message.id, {
+        status: MessageStatus.FAILED,
+        failedAt: new Date(),
+        errorMessage: 'No phone number',
+      });
+      return { success: false, error: 'No phone number' };
+    }
+
+    // Personalize content
+    // Note: We don't HTML escape SMS content as it's plain text
+    const personalizedBody = this.personalizeSmsContent(content.message, contact);
+
+    const result = await this.smsService.sendSms({
+      to: message.recipientPhone,
+      from: content.senderId || undefined,
+      message: personalizedBody,
+    });
+
+    if (result.success) {
+      await this.messageRepository.update(message.id, {
+        status: MessageStatus.SENT,
+        sentAt: new Date(),
+        externalId: result.messageId,
+        cost: result.cost,
+        segments: result.segments, // Assuming segments field exists in entity, otherwise it will be ignored
+        renderedContent: {
+          body: personalizedBody,
+        },
+      });
+
+      // Create sent event
+      await this.createEvent(message, EventType.SENT);
+
+      return { success: true };
+    } else {
+      await this.messageRepository.update(message.id, {
+        status: MessageStatus.FAILED,
+        failedAt: new Date(),
+        errorMessage: result.error,
+      });
+
+      // Create failed event
+      await this.createEvent(message, EventType.FAILED);
+
+      return { success: false, error: result.error };
+    }
+  }
+
+  /**
+   * Personalize SMS content (no HTML escaping)
+   */
+  private personalizeSmsContent(content: string, contact: Contact): string {
+    if (!content) return content;
+
+    const replacements: Record<string, string> = {
+      first_name: contact.firstName || '',
+      last_name: contact.lastName || '',
+      full_name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      company: contact.company || '',
+      job_title: contact.jobTitle || '',
+      city: contact.city || '',
+      state: contact.state || '',
+      country: contact.country || '',
+    };
+
+    if (contact.customFields) {
+      Object.entries(contact.customFields).forEach(([key, value]) => {
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+          replacements[key.toLowerCase()] = String(value || '');
+        }
+      });
+    }
+
+    return content.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
+      return replacements[variable.toLowerCase()] ?? match;
+    });
   }
 
   /**
@@ -610,6 +725,49 @@ export class CampaignSendService {
   }
 
   /**
+   * Send a test SMS
+   */
+  async sendTestSms(
+    tenantId: string,
+    campaignId: string,
+    testPhone: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId, tenantId },
+    });
+
+    if (!campaign) {
+      throw new BadRequestException('Campaign not found');
+    }
+
+    if (campaign.type !== CampaignType.SMS) {
+      throw new BadRequestException('Test send only available for SMS campaigns');
+    }
+
+    // Need to import SmsService and inject it
+    const content = campaign.content as SmsContent;
+
+    // Create a mock contact for personalization
+    const mockContact = {
+      firstName: 'Test',
+      lastName: 'User',
+      phone: testPhone,
+      email: 'test@example.com',
+      customFields: {},
+    } as Contact;
+
+    const personalizedBody = this.personalizeContent(content.message, mockContact);
+
+    const result = await this.smsService.sendSms({
+      to: testPhone,
+      from: content.senderId || undefined,
+      message: personalizedBody,
+    });
+
+    return result;
+  }
+
+  /**
    * Release a prepared campaign (Exact Time Delivery)
    * Flushes prepared messages to queue immediately
    */
@@ -679,24 +837,44 @@ export class CampaignSendService {
       );
 
       // 3. Push to RabbitMQ
-      const sendMessages: any[] = []; // Type should be EmailSendMessage
-      for (const message of messages) {
-        if (!message.contact?.email) continue;
-        sendMessages.push({
-          campaignId: campaign.id,
-          tenantId: campaign.tenantId,
-          messageId: message.id,
-          contactId: message.contactId,
-          email: message.contact.email,
-          firstName: message.contact.firstName || undefined,
-          lastName: message.contact.lastName || undefined,
-          customFields: message.contact.customFields || undefined,
-          attempt: 1,
-        });
-      }
-
-      if (sendMessages.length > 0) {
-        await this.queueService.publishEmailSendBatch(sendMessages);
+      if (campaign.type === CampaignType.EMAIL) {
+        const sendMessages: any[] = [];
+        for (const message of messages) {
+          if (!message.contact?.email) continue;
+          sendMessages.push({
+            campaignId: campaign.id,
+            tenantId: campaign.tenantId,
+            messageId: message.id,
+            contactId: message.contactId,
+            email: message.contact.email,
+            firstName: message.contact.firstName || undefined,
+            lastName: message.contact.lastName || undefined,
+            customFields: message.contact.customFields || undefined,
+            attempt: 1,
+          });
+        }
+        if (sendMessages.length > 0) {
+          await this.queueService.publishEmailSendBatch(sendMessages);
+        }
+      } else if (campaign.type === CampaignType.SMS) {
+        const sendMessages: any[] = [];
+        for (const message of messages) {
+          if (!message.recipientPhone) continue;
+          sendMessages.push({
+            campaignId: campaign.id,
+            tenantId: campaign.tenantId,
+            messageId: message.id,
+            contactId: message.contactId,
+            phoneNumber: message.recipientPhone,
+            firstName: message.contact?.firstName || undefined,
+            lastName: message.contact?.lastName || undefined,
+            customFields: message.contact?.customFields || undefined,
+            attempt: 1,
+          });
+        }
+        if (sendMessages.length > 0) {
+          await this.queueService.publishSmsSendBatch(sendMessages);
+        }
       }
 
       processed += messages.length;
