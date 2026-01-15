@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,11 +35,12 @@ import {
   UpdateTemplateCategoryDto,
 } from './dto';
 import { PaginatedResponseDto } from '@/common/dto/pagination.dto';
+import { CloudinaryService } from '@/providers/storage/cloudinary.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-// Thumbnail upload directory
+// Local thumbnail upload directory (fallback when Cloudinary not configured)
 const THUMBNAIL_DIR = './uploads/thumbnails';
 
 @ApiTags('Templates')
@@ -46,8 +48,13 @@ const THUMBNAIL_DIR = './uploads/thumbnails';
 @UseGuards(JwtAuthGuard)
 @Controller('templates')
 export class TemplatesController {
-  constructor(private readonly templatesService: TemplatesService) {
-    // Ensure thumbnail directory exists
+  private readonly logger = new Logger(TemplatesController.name);
+
+  constructor(
+    private readonly templatesService: TemplatesService,
+    private readonly cloudinaryService: CloudinaryService
+  ) {
+    // Ensure thumbnail directory exists for fallback
     if (!fs.existsSync(THUMBNAIL_DIR)) {
       fs.mkdirSync(THUMBNAIL_DIR, { recursive: true });
     }
@@ -181,6 +188,38 @@ export class TemplatesController {
       throw new BadRequestException('Invalid image format. Only PNG and JPEG are supported.');
     }
 
+    let thumbnailUrl: string;
+
+    // Try Cloudinary first, fallback to local storage
+    if (this.cloudinaryService.isReady()) {
+      try {
+        this.logger.log(`Uploading thumbnail to Cloudinary for template ${templateId}`);
+        const result = await this.cloudinaryService.uploadBase64Image(image, {
+          folder: `marketing-platform/${tenantId}/templates`,
+          publicId: `template-${templateId}`,
+        });
+        thumbnailUrl = result.secureUrl;
+        this.logger.log(`Thumbnail uploaded to Cloudinary: ${thumbnailUrl}`);
+      } catch (error) {
+        this.logger.error('Cloudinary upload failed, falling back to local storage', error);
+        thumbnailUrl = await this.saveLocalThumbnail(image, templateId, matches);
+      }
+    } else {
+      this.logger.warn('Cloudinary not configured, using local storage');
+      thumbnailUrl = await this.saveLocalThumbnail(image, templateId, matches);
+    }
+
+    // Update template with thumbnail URL
+    await this.templatesService.update(tenantId, templateId, { thumbnailUrl });
+
+    return { thumbnailUrl };
+  }
+
+  private async saveLocalThumbnail(
+    image: string,
+    templateId: string,
+    matches: RegExpMatchArray
+  ): Promise<string> {
     const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
     const base64Data = matches[2];
     const buffer = Buffer.from(base64Data, 'base64');
@@ -193,12 +232,7 @@ export class TemplatesController {
     fs.writeFileSync(filePath, buffer);
 
     // Return URL path (relative to API)
-    const thumbnailUrl = `/uploads/thumbnails/${filename}`;
-
-    // Update template with thumbnail URL
-    await this.templatesService.update(tenantId, templateId, { thumbnailUrl });
-
-    return { thumbnailUrl };
+    return `/uploads/thumbnails/${filename}`;
   }
 
   // NOTE: :id routes must come AFTER all specific routes like /stats, /categories

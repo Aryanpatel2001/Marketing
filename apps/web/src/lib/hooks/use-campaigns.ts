@@ -7,7 +7,6 @@ import {
   CampaignsQuery,
   CreateCampaignData,
   UpdateCampaignData,
-  SendTestData,
 } from '@/lib/api/campaigns';
 import { getErrorMessage } from '@/lib/api/client';
 
@@ -41,16 +40,16 @@ export function useCampaign(id: string) {
 export function useCampaignStats(id: string) {
   return useQuery({
     queryKey: campaignKeys.stats(id),
-    queryFn: () => campaignsApi.getCampaignStats(id),
+    queryFn: () => campaignsApi.getStats(id),
     enabled: !!id,
     refetchInterval: 30 * 1000, // Refetch every 30 seconds for live stats
   });
 }
 
-export function useCampaignEvents(id: string, query?: { page?: number; limit?: number; type?: string }) {
+export function useCampaignEvents(id: string, query?: { page?: number; limit?: number }) {
   return useQuery({
     queryKey: [...campaignKeys.events(id), query],
-    queryFn: () => campaignsApi.getCampaignEvents(id, query),
+    queryFn: () => campaignsApi.getEvents(id, query),
     enabled: !!id,
   });
 }
@@ -200,10 +199,10 @@ export function useCancelCampaign() {
 
 export function useSendTestCampaign() {
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: SendTestData }) =>
-      campaignsApi.sendTest(id, data),
+    mutationFn: ({ id, email }: { id: string; email: string }) =>
+      campaignsApi.sendTestEmail(id, email),
     onSuccess: () => {
-      toast.success('Test sent successfully');
+      toast.success('Test email sent successfully');
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));

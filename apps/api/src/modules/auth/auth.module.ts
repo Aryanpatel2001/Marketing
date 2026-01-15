@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 
+import { TenantsModule } from '../tenants/tenants.module';
+import { UsersModule } from '../users/users.module';
+import { BillingModule } from '../billing/billing.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtStrategy, JwtRefreshStrategy, GoogleStrategy } from './strategies';
-import { UsersModule } from '../users/users.module';
-import { TenantsModule } from '../tenants/tenants.module';
+import { GoogleStrategy, JwtRefreshStrategy, JwtStrategy } from './strategies';
 
 @Module({
   imports: [
@@ -24,14 +25,10 @@ import { TenantsModule } from '../tenants/tenants.module';
     }),
     UsersModule,
     TenantsModule,
+    BillingModule,
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    JwtRefreshStrategy,
-    GoogleStrategy,
-  ],
+  providers: [AuthService, JwtStrategy, JwtRefreshStrategy, GoogleStrategy],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

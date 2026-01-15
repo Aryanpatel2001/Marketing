@@ -6,17 +6,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(process.cwd(), 'apps/api/.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
 import * as express from 'express';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    rawBody: true, // Enable raw body for Stripe webhook signature verification
   });
 
   const configService = app.get(ConfigService);
@@ -36,7 +37,7 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api/v1', {
-    exclude: ['health', 'docs', 'uploads/(.*)'],
+    exclude: ['health', 'health/(.*)', 'docs', 'uploads/(.*)'],
   });
 
   // Serve static files from uploads directory with CORS headers

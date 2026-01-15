@@ -1,27 +1,27 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { useUIStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { useUIStore } from '@/store';
 import {
-  LayoutDashboard,
-  Users,
-  Send,
-  Mail,
   BarChart3,
-  Settings,
-  CreditCard,
-  Key,
-  FileText,
   ChevronLeft,
   ChevronRight,
-  Zap,
+  CreditCard,
+  FileText,
+  Key,
+  LayoutDashboard,
   MessageSquare,
+  Send,
+  Settings,
+  Smartphone,
+  Users,
+  Zap,
 } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const navigation = [
   {
@@ -71,6 +71,11 @@ const settingsNavigation = [
     name: 'API Keys',
     href: '/settings/api-keys',
     icon: Key,
+  },
+  {
+    name: 'Sender IDs',
+    href: '/settings/sms/senders',
+    icon: Smartphone,
   },
 ];
 
@@ -149,7 +154,7 @@ export function DashboardSidebar() {
           )}
           <nav className="space-y-1">
             {settingsNavigation.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
               if (sidebarCollapsed) {
                 return (

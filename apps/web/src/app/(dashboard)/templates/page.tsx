@@ -592,7 +592,11 @@ function TemplateCard({
       <div className="bg-muted relative flex h-32 items-center justify-center overflow-hidden">
         {template.type === 'email' && template.thumbnailUrl ? (
           <img
-            src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${template.thumbnailUrl}`}
+            src={
+              template.thumbnailUrl.startsWith('http')
+                ? template.thumbnailUrl
+                : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}${template.thumbnailUrl}`
+            }
             alt={template.name}
             className="h-full w-full object-cover"
           />

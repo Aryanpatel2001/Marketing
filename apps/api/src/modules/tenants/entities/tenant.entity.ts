@@ -1,4 +1,4 @@
-import { Entity, Column, OneToMany } from 'typeorm';
+import { Column, Entity } from 'typeorm';
 import { BaseEntity } from '../../../common/entities/base.entity';
 
 export enum SubscriptionPlan {
@@ -14,6 +14,7 @@ export enum TenantStatus {
   SUSPENDED = 'suspended',
   CANCELLED = 'cancelled',
   TRIAL = 'trial',
+  GRACE_PERIOD = 'grace_period',
 }
 
 @Entity('tenants')
@@ -70,4 +71,10 @@ export class Tenant extends BaseEntity {
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   timezone: string | null;
+
+  @Column({ name: 'payment_failed_at', type: 'timestamp with time zone', nullable: true })
+  paymentFailedAt: Date | null;
+
+  @Column({ name: 'failed_payment_count', type: 'int', default: 0 })
+  failedPaymentCount: number;
 }

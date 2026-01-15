@@ -1,33 +1,43 @@
 import {
-  Injectable,
-  UnauthorizedException,
   BadRequestException,
   ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
-import { UsersService } from '../users/users.service';
 import { TenantsService } from '../tenants/tenants.service';
-import { User, UserRole, AuthProvider } from '../users/entities/user.entity';
-import { RegisterDto } from './dto/register.dto';
+import { AuthProvider, User, UserRole } from '../users/entities/user.entity';
+import { UsersService } from '../users/users.service';
+import { StripeService } from '../billing/services/stripe.service';
+import { WalletService } from '../billing/services/wallet.service';
+import { TransactionType } from '../billing/entities/wallet-transaction.entity';
 import { LoginDto } from './dto/login.dto';
-import { TokensDto, AccessTokenPayload, RefreshTokenPayload } from './dto/tokens.dto';
+import { RegisterDto } from './dto/register.dto';
+import { AccessTokenPayload, RefreshTokenPayload, TokensDto } from './dto/tokens.dto';
 
 export interface AuthResponse {
   user: Partial<User>;
   tokens: TokensDto;
 }
 
+const TRIAL_CREDITS = 100; // Free credits for trial users
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly tenantsService: TenantsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly stripeService: StripeService,
+    private readonly walletService: WalletService
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -46,6 +56,13 @@ export class AuthService {
       name: dto.companyName || `${dto.firstName}'s Workspace`,
       billingEmail: dto.email,
     });
+
+    // Create Stripe customer and wallet for billing
+    await this.setupBillingForTenant(
+      tenant.id,
+      dto.email,
+      dto.companyName || `${dto.firstName}'s Workspace`
+    );
 
     // Create user as owner of the tenant
     const user = await this.usersService.create({
@@ -175,7 +192,11 @@ export class AuthService {
     throw new BadRequestException('Password reset functionality not fully implemented');
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new BadRequestException('User not found');
@@ -210,7 +231,7 @@ export class AuthService {
         // Link Google account to existing user
         if (existingUser.authProvider === AuthProvider.LOCAL) {
           throw new BadRequestException(
-            'An account with this email already exists. Please sign in with your password and link your Google account in settings.',
+            'An account with this email already exists. Please sign in with your password and link your Google account in settings.'
           );
         }
         user = existingUser;
@@ -220,6 +241,13 @@ export class AuthService {
           name: `${googleUser.firstName}'s Workspace`,
           billingEmail: googleUser.email,
         });
+
+        // Create Stripe customer and wallet for billing
+        await this.setupBillingForTenant(
+          tenant.id,
+          googleUser.email,
+          `${googleUser.firstName}'s Workspace`
+        );
 
         user = await this.usersService.create({
           email: googleUser.email,
@@ -316,5 +344,41 @@ export class AuthService {
   private sanitizeUser(user: User): Partial<User> {
     const { password, refreshTokenHash, ...sanitized } = user;
     return sanitized;
+  }
+
+  /**
+   * Set up billing infrastructure for a new tenant
+   * Creates Stripe customer, wallet, and adds trial credits
+   */
+  private async setupBillingForTenant(
+    tenantId: string,
+    email: string,
+    name: string
+  ): Promise<void> {
+    try {
+      // Create Stripe customer
+      const stripeCustomer = await this.stripeService.createCustomer(tenantId, email, name);
+
+      // Update tenant with Stripe customer ID
+      await this.tenantsService.updateStripeIds(tenantId, stripeCustomer.id);
+
+      // Create wallet for the tenant
+      await this.walletService.createWallet(tenantId);
+
+      // Add trial credits
+      await this.walletService.addCredits(
+        tenantId,
+        TRIAL_CREDITS,
+        TransactionType.SUBSCRIPTION_CREDIT,
+        undefined,
+        { reason: 'Trial signup credits' }
+      );
+
+      this.logger.log(`Billing setup complete for tenant ${tenantId}`);
+    } catch (error) {
+      // Log error but don't fail registration
+      // Billing can be set up later if needed
+      this.logger.error(`Failed to set up billing for tenant ${tenantId}:`, error);
+    }
   }
 }

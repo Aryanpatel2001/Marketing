@@ -140,6 +140,17 @@ export const QUEUES = {
       maxLength: 100000,
     },
   },
+  SMS_RETRY: {
+    name: 'sms.retry.queue',
+    routingKey: 'sms.message.retry',
+    options: {
+      durable: true,
+      deadLetterExchange: EXCHANGES.CAMPAIGNS_DLX.name,
+      deadLetterRoutingKey: 'sms.retry.dlq',
+      messageTtl: 3600000,
+      maxLength: 50000,
+    },
+  },
 
   // WhatsApp queues
   WHATSAPP_PREPARE: {
@@ -300,6 +311,45 @@ export interface EmailRetryMessage extends EmailSendMessage {
   nextRetryAt?: Date;
 }
 
+// SMS Message Types
+export interface SmsPrepareMessage {
+  campaignId: string;
+  tenantId: string;
+  batchSize?: number;
+  isDryRun?: boolean;
+}
+
+export interface SmsSendMessage {
+  campaignId: string;
+  tenantId: string;
+  messageId: string;
+  contactId: string;
+  phoneNumber: string;
+  firstName?: string;
+  lastName?: string;
+  customFields?: Record<string, any>;
+  attempt?: number;
+}
+
+export interface SmsBatchMessage {
+  campaignId: string;
+  tenantId: string;
+  messages: Array<{
+    messageId: string;
+    contactId: string;
+    phoneNumber: string;
+    firstName?: string;
+    lastName?: string;
+    customFields?: Record<string, any>;
+  }>;
+}
+
+export interface SmsRetryMessage extends SmsSendMessage {
+  attempt: number;
+  lastError?: string;
+  nextRetryAt?: Date;
+}
+
 export interface TrackingEventMessage {
   type: 'open' | 'click' | 'unsubscribe' | 'bounce' | 'complaint';
   messageId: string;
@@ -319,6 +369,19 @@ export interface WebhookSESMessage {
   notificationType: 'Bounce' | 'Complaint' | 'Delivery';
   messageId: string;
   timestamp: Date;
+  payload: Record<string, any>;
+}
+
+export interface WebhookTwilioMessage {
+  messageSid: string;
+  messageStatus: string;
+  errorCode?: string;
+  errorMessage?: string;
+  from?: string;
+  to?: string;
+  timestamp: Date;
+  tenantId?: string; // Optional because legacy or untagged might not have it
+  campaignId?: string;
   payload: Record<string, any>;
 }
 

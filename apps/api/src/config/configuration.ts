@@ -57,7 +57,6 @@ export default () => ({
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
     phoneNumber: process.env.TWILIO_PHONE_NUMBER,
-    whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER,
     messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
   },
 
@@ -77,6 +76,11 @@ export default () => ({
       growthYearly: process.env.STRIPE_PRICE_GROWTH_YEARLY,
       proMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
       proYearly: process.env.STRIPE_PRICE_PRO_YEARLY,
+      enterpriseMonthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
+    },
+    creditPricing: {
+      pricePerCredit: parseFloat(process.env.STRIPE_PRICE_PER_CREDIT || '0.05'),
+      trialCredits: parseInt(process.env.TRIAL_CREDITS || '100', 10),
     },
   },
 

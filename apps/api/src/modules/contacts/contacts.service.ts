@@ -207,12 +207,14 @@ export class ContactsService {
       queryBuilder.andWhere('contact.total_emails_clicked > 0');
     }
 
-    // Filter by list membership
+    // Filter by list membership - use subquery to avoid join issues with orderBy
     if (query.listId) {
-      queryBuilder.innerJoin(
-        'contact_list_members',
-        'clm',
-        'clm.contact_id = contact.id AND clm.contact_list_id = :listId',
+      queryBuilder.andWhere(
+        `contact.id IN (
+          SELECT clm.contact_id
+          FROM contact_list_members clm
+          WHERE clm.contact_list_id = :listId
+        )`,
         { listId: query.listId }
       );
     }
@@ -235,14 +237,15 @@ export class ContactsService {
     const sortOrder = query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     queryBuilder.orderBy(`contact.${this.toSnakeCase(sortField)}`, sortOrder);
 
-    // Pagination
-    const total = await queryBuilder.getCount();
-    const contacts = await queryBuilder
-      .skip(query.skip)
-      .take(query.limit || 20)
-      .getMany();
+    // Pagination - calculate skip directly to avoid getter issues with plain objects
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
 
-    return new PaginatedResponseDto(contacts, query.page || 1, query.limit || 20, total);
+    const total = await queryBuilder.getCount();
+    const contacts = await queryBuilder.skip(skip).take(limit).getMany();
+
+    return new PaginatedResponseDto(contacts, page, limit, total);
   }
 
   async findOne(tenantId: string, id: string): Promise<Contact> {
