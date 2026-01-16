@@ -42,7 +42,7 @@ async function approveSenderId() {
     console.log('Connected to database.');
 
     const query = `
-      UPDATE sms_sender_ids
+      UPDATE sms_senders
       SET status = 'active', verified_at = NOW()
       WHERE id = $1
       RETURNING *;

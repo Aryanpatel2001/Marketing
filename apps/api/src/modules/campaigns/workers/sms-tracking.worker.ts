@@ -57,8 +57,7 @@ export class SmsTrackingWorker implements OnModuleInit {
   }
 
   private async processMessage(message: WebhookTwilioMessage): Promise<void> {
-    const { messageSid, messageStatus, errorCode, errorMessage, timestamp, tenantId, _campaignId } =
-      message;
+    const { messageSid, messageStatus, errorCode, errorMessage, timestamp, tenantId } = message;
 
     if (!tenantId) {
       this.logger.warn(`Missing tenantId for SMS tracking message ${messageSid}`);
