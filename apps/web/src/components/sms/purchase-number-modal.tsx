@@ -57,7 +57,7 @@ export function PurchaseNumberModal({ open, onOpenChange }: PurchaseNumberModalP
   const [friendlyName, setFriendlyName] = useState('');
   const [searchParams, setSearchParams] = useState<SearchAvailableNumbersParams | null>(null);
 
-  const { data: _planLimits } = usePlanLimits();
+  const { data: planLimits } = usePlanLimits();
   const purchaseMutation = usePurchaseNumber();
 
   const { register, handleSubmit, watch, setValue, reset } = useForm<SearchForm>({
