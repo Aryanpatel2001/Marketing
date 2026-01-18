@@ -423,4 +423,120 @@ export class SmsSettingsService {
 
     return settings.webhookSecret;
   }
+
+  /**
+   * Test webhook delivery
+   */
+  async testWebhook(
+    tenantId: string
+  ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+    const settings = await this.getSettings(tenantId);
+
+    if (!settings.webhookUrl) {
+      throw new BadRequestException('No webhook URL configured');
+    }
+
+    const testPayload = {
+      type: 'test',
+      timestamp: new Date().toISOString(),
+      tenantId,
+      data: {
+        message: 'This is a test webhook from your SMS settings',
+        messageSid: 'TEST_' + Date.now(),
+        status: 'delivered',
+      },
+    };
+
+    try {
+      const response = await fetch(settings.webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Webhook-Secret': settings.webhookSecret || '',
+          'X-Webhook-Signature': this.generateWebhookSignature(
+            testPayload,
+            settings.webhookSecret || ''
+          ),
+        },
+        body: JSON.stringify(testPayload),
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
+
+      if (response.ok) {
+        this.logger.log(`Webhook test successful for tenant ${tenantId}`);
+        return { success: true, statusCode: response.status };
+      } else {
+        return {
+          success: false,
+          statusCode: response.status,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+        };
+      }
+    } catch (error: any) {
+      this.logger.error(`Webhook test failed for tenant ${tenantId}: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Generate webhook signature for payload
+   */
+  private generateWebhookSignature(payload: any, secret: string): string {
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(JSON.stringify(payload));
+    return 'sha256=' + hmac.digest('hex');
+  }
+
+  /**
+   * Get opt-out handling configuration
+   */
+  async getOptOutConfig(tenantId: string): Promise<{
+    keywords: string[];
+    autoReplyEnabled: boolean;
+    autoReplyMessage: string;
+  }> {
+    const settings = await this.getSettings(tenantId);
+    const metadata = settings.metadata || {};
+
+    return {
+      keywords: (metadata.optOutKeywords as string[]) || [
+        'STOP',
+        'UNSUBSCRIBE',
+        'CANCEL',
+        'END',
+        'QUIT',
+      ],
+      autoReplyEnabled: (metadata.optOutAutoReplyEnabled as boolean) ?? true,
+      autoReplyMessage:
+        (metadata.optOutAutoReplyMessage as string) ||
+        'You have been unsubscribed and will no longer receive SMS messages from us. Reply START to resubscribe.',
+    };
+  }
+
+  /**
+   * Update opt-out handling configuration
+   */
+  async updateOptOutConfig(
+    tenantId: string,
+    config: { autoReplyEnabled?: boolean; autoReplyMessage?: string }
+  ): Promise<void> {
+    const settings = await this.getSettings(tenantId);
+    const metadata = settings.metadata || {};
+
+    if (config.autoReplyEnabled !== undefined) {
+      metadata.optOutAutoReplyEnabled = config.autoReplyEnabled;
+    }
+
+    if (config.autoReplyMessage !== undefined) {
+      metadata.optOutAutoReplyMessage = config.autoReplyMessage;
+    }
+
+    settings.metadata = metadata;
+    await this.settingsRepository.save(settings);
+
+    this.logger.log(`Updated opt-out config for tenant ${tenantId}`);
+  }
 }

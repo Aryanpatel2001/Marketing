@@ -1,5 +1,5 @@
-import { WalletService } from '@/modules/billing/services/wallet.service';
 import { SmsSender, SmsSenderType } from '@/modules/sms/entities/sms-sender.entity';
+import { ComplianceService } from '@/modules/sms/services/compliance.service';
 import { SenderService } from '@/modules/sms/services/sender.service';
 import {
   QUEUES,
@@ -20,6 +20,7 @@ import { Repository } from 'typeorm';
 import { CampaignEvent, EventType } from '../entities/campaign-event.entity';
 import { CampaignMessage, MessageStatus } from '../entities/campaign-message.entity';
 import { Campaign, CampaignStatus, SmsContent } from '../entities/campaign.entity';
+import { CampaignSendService } from '../services/campaign-send.service';
 
 @Injectable()
 export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
@@ -51,8 +52,9 @@ export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
     private readonly counterService: RedisCounterService,
     private readonly cacheService: RedisCacheService,
     private readonly configService: ConfigService,
-    private readonly walletService: WalletService,
-    private readonly senderService: SenderService
+    private readonly senderService: SenderService,
+    private readonly complianceService: ComplianceService,
+    private readonly campaignSendService: CampaignSendService
   ) {
     this.smsRateLimit = parseInt(this.configService.get<string>('SMS_RATE_LIMIT', '10'), 10);
     this.logger.log(`SMS rate limit configured: ${this.smsRateLimit} messages/second`);
@@ -204,29 +206,43 @@ export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Check wallet balance before sending
-      const hasBalance = await this.walletService.hasBalance(tenantId, 1);
-      if (!hasBalance) {
+      const content = campaign.content as SmsContent;
+      const personalizedBody = this.personalizeContent(content.message, message);
+
+      // Per-message compliance validation (uses tenant's region)
+      const complianceResult = await this.complianceService.validateSingleMessage(
+        tenantId,
+        phoneNumber
+      );
+
+      // If compliance check fails in strict mode, mark message as failed
+      if (!complianceResult.canSend) {
+        const complianceError =
+          complianceResult.errors
+            .filter((e) => e.blocking)
+            .map((e) => e.message)
+            .join('; ') || 'Compliance check failed';
+
         this.logger.warn(
-          `Insufficient credits for tenant ${tenantId}, pausing campaign ${campaignId}`
+          `[SMS COMPLIANCE BLOCKED] Message: ${messageId} | Phone: ${phoneNumber} | ` +
+            `Region: ${complianceResult.region} | Error: ${complianceError}`
         );
-        await this.markMessageFailed(messageId, 'Insufficient credits');
-        await this.counterService.incrFailed(campaignId);
 
-        // Pause the campaign due to insufficient credits
-        await this.campaignRepository.update(campaignId, {
-          status: CampaignStatus.PAUSED,
-        });
-
+        await this.handleFailure(message, `Compliance: ${complianceError}`);
         return;
+      }
+
+      // Log warnings even if we can send
+      if (complianceResult.warnings.length > 0) {
+        this.logger.warn(
+          `[SMS COMPLIANCE WARNING] Message: ${messageId} | Phone: ${phoneNumber} | ` +
+            `Warnings: ${complianceResult.warnings.map((w) => w.message).join('; ')}`
+        );
       }
 
       await this.messageRepository.update(messageId, {
         status: MessageStatus.SENDING,
       });
-
-      const content = campaign.content as SmsContent;
-      const personalizedBody = this.personalizeContent(content.message, message);
 
       // Get the sender for this tenant
       const sender = await this.getSenderCached(tenantId, content.senderId);
@@ -271,6 +287,7 @@ export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
           {
             body: personalizedBody,
             senderId: fromAddress,
+            region: complianceResult.region,
           }
         );
       } else {
@@ -299,14 +316,6 @@ export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
     renderedContent?: Record<string, string>
   ): Promise<void> {
     const sentAt = new Date();
-
-    // Deduct credit for successful SMS send
-    try {
-      await this.walletService.deductCredits(tenantId, 1, campaignId, messageId);
-    } catch (error: any) {
-      this.logger.error(`Failed to deduct credit for message ${messageId}: ${error.message}`);
-      // Continue even if credit deduction fails - we'll reconcile later
-    }
 
     this.bufferMessageUpdate(messageId, {
       status: MessageStatus.SENT,
@@ -478,6 +487,9 @@ export class SmsSendWorker implements OnModuleInit, OnModuleDestroy {
             sentCount: stats.sent,
             failedCount: stats.failed,
           });
+
+          // Finalize billing - release reserved funds
+          await this.campaignSendService.finalizeCampaignBilling(campaignId);
 
           await this.cacheService.setCampaignProgress(campaignId, {
             sent: stats.sent,

@@ -33,7 +33,7 @@ const VARIABLES = [
 
 export function SmsMessageEditor({ value, onChange, className }: SmsMessageEditorProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const { segments, characters, encoding, remainingCharacters, _isLoading } = useSmsSegments({
+  const { segments, characters, encoding, remainingCharacters } = useSmsSegments({
     message: value,
   });
 
