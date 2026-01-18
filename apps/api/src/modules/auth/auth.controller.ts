@@ -10,13 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiBody,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 
@@ -27,6 +21,7 @@ import { RefreshTokenDto, TokensDto } from './dto/tokens.dto';
 import { ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto } from './dto/forgot-password.dto';
 import { Public, CurrentUser } from '../../common/decorators';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { TenantsService } from '../tenants/tenants.service';
 
 interface GoogleUser {
   googleId: string;
@@ -42,6 +37,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly tenantsService: TenantsService
   ) {}
 
   @Post('register')
@@ -116,7 +112,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Current password is incorrect' })
   async changePassword(
     @CurrentUser('id') userId: string,
-    @Body() dto: ChangePasswordDto,
+    @Body() dto: ChangePasswordDto
   ): Promise<{ message: string }> {
     await this.authService.changePassword(userId, dto.currentPassword, dto.newPassword);
     return { message: 'Password changed successfully' };
@@ -129,7 +125,14 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getProfile(@CurrentUser() user: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return user;
+    // Fetch tenant to get region
+    const tenantId = user.tenantId as string;
+    const tenant = tenantId ? await this.tenantsService.findById(tenantId) : null;
+
+    return {
+      ...user,
+      tenantRegion: tenant?.region || 'US',
+    };
   }
 
   // =============================================
@@ -152,7 +155,7 @@ export class AuthController {
   @ApiResponse({ status: 302, description: 'Redirect to frontend with tokens' })
   async googleAuthCallback(
     @Req() req: Request & { user: GoogleUser },
-    @Res() res: Response,
+    @Res() res: Response
   ): Promise<void> {
     const result = await this.authService.validateGoogleUser(req.user);
 

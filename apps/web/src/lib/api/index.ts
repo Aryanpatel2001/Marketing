@@ -4,4 +4,5 @@ export * from './campaigns';
 export * from './client';
 export * from './contacts';
 export * from './sms';
+export * from './sms-compliance';
 export * from './templates';

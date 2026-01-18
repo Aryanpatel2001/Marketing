@@ -39,10 +39,12 @@ export function useAuth() {
   const registerMutation = useMutation({
     mutationFn: (data: RegisterData) => authApi.register(data),
     onSuccess: (data) => {
-      login(data.user, data.tokens.accessToken, data.tokens.refreshToken);
+      // Pass true for requiresOnboarding to prevent auth layout from redirecting to dashboard
+      login(data.user, data.tokens.accessToken, data.tokens.refreshToken, true);
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       toast.success('Account created successfully!');
-      router.push('/onboarding');
+      // Redirect to plan selection for onboarding
+      router.push('/onboarding/select-plan');
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));

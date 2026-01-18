@@ -248,7 +248,12 @@ export interface EmailTemplate {
   updatedAt: Date;
 }
 
-export type TemplateCategory = 'newsletter' | 'promotional' | 'transactional' | 'welcome' | 'announcement';
+export type TemplateCategory =
+  | 'newsletter'
+  | 'promotional'
+  | 'transactional'
+  | 'welcome'
+  | 'announcement';
 
 // ============================================
 // Billing Types
@@ -287,24 +292,6 @@ export interface PlanFeatures {
   dedicatedIp: boolean;
   prioritySupport: boolean;
 }
-
-export interface Subscription {
-  id: string;
-  tenantId: string;
-  planId: string;
-  stripeSubscriptionId: string | null;
-  stripeCustomerId: string | null;
-  status: SubscriptionStatus;
-  billingCycle: 'monthly' | 'yearly';
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  cancelAtPeriodEnd: boolean;
-  cancelledAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'trialing';
 
 // ============================================
 // Analytics Types

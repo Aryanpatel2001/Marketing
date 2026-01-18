@@ -8,6 +8,7 @@ export interface User {
   lastName: string;
   role: string;
   tenantId: string;
+  tenantRegion: 'US' | 'EU';
   emailVerified: boolean;
   avatar?: string;
 }
@@ -18,15 +19,22 @@ interface AuthState {
   isLoading: boolean;
   accessToken: string | null;
   refreshToken: string | null;
+  requiresOnboarding: boolean;
 }
 
 interface AuthActions {
   setUser: (user: User | null) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   setLoading: (isLoading: boolean) => void;
-  login: (user: User, accessToken: string, refreshToken: string) => void;
+  login: (
+    user: User,
+    accessToken: string,
+    refreshToken: string,
+    requiresOnboarding?: boolean
+  ) => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  setRequiresOnboarding: (requires: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState & AuthActions>()(
@@ -37,6 +45,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       isLoading: true,
       accessToken: null,
       refreshToken: null,
+      requiresOnboarding: false,
 
       setUser: (user) =>
         set({
@@ -52,7 +61,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
 
       setLoading: (isLoading) => set({ isLoading }),
 
-      login: (user, accessToken, refreshToken) => {
+      login: (user, accessToken, refreshToken, requiresOnboarding = false) => {
         // Store tokens in localStorage for API client
         if (typeof window !== 'undefined') {
           localStorage.setItem('accessToken', accessToken);
@@ -64,8 +73,11 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           accessToken,
           refreshToken,
           isLoading: false,
+          requiresOnboarding,
         });
       },
+
+      setRequiresOnboarding: (requires) => set({ requiresOnboarding: requires }),
 
       logout: () => {
         // Clear tokens from localStorage

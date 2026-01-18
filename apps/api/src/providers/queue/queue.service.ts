@@ -8,6 +8,7 @@ import {
   EmailRetryMessage,
   EmailSendMessage,
   EXCHANGES,
+  InboundSmsMessage,
   QUEUES,
   ROUTING_KEYS,
   SmsBatchMessage,
@@ -404,6 +405,13 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
    */
   async publishTwilioWebhook(message: WebhookTwilioMessage): Promise<boolean> {
     return this.publish(EXCHANGES.EVENTS.name, ROUTING_KEYS.WEBHOOK_TWILIO, message);
+  }
+
+  /**
+   * Publish inbound SMS message for processing
+   */
+  async publishInboundSms(message: InboundSmsMessage): Promise<boolean> {
+    return this.publish(EXCHANGES.EVENTS.name, ROUTING_KEYS.WEBHOOK_TWILIO_INBOUND, message);
   }
 
   // ==================== Campaign Lifecycle ====================

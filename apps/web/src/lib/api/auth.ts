@@ -11,6 +11,7 @@ export interface RegisterData {
   lastName: string;
   email: string;
   password: string;
+  phoneNumber: string;
   companyName?: string;
   acceptTerms: boolean;
 }
@@ -23,6 +24,7 @@ export interface AuthResponse {
     lastName: string;
     role: string;
     tenantId: string;
+    tenantRegion: 'US' | 'EU';
     emailVerified: boolean;
   };
   tokens: {

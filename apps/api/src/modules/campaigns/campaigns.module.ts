@@ -1,3 +1,4 @@
+import { BillingModule } from '@/modules/billing/billing.module';
 import { ContactListMember } from '@/modules/contacts/entities/contact-list-member.entity';
 import { Contact } from '@/modules/contacts/entities/contact.entity';
 import { SmsModule as SmsSendersModule } from '@/modules/sms/sms.module';
@@ -5,7 +6,6 @@ import { EmailModule } from '@/providers/email/email.module';
 import { SmsModule } from '@/providers/sms/sms.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { BillingModule } from '../billing/billing.module';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { SESWebhookController } from './controllers/ses-webhook.controller';
@@ -31,7 +31,9 @@ import { SmsPrepareWorker } from './workers/sms-prepare.worker';
 import { SmsRetryWorker } from './workers/sms-retry.worker';
 import { SmsSendWorker } from './workers/sms-send.worker';
 import { SmsTrackingWorker } from './workers/sms-tracking.worker';
+import { SmsInboundWorker } from './workers/sms-inbound.worker';
 import { TrackingBulkWorker } from './workers/tracking-bulk.worker';
+import { SmsSender } from '@/modules/sms/entities/sms-sender.entity';
 
 @Module({
   imports: [
@@ -43,11 +45,12 @@ import { TrackingBulkWorker } from './workers/tracking-bulk.worker';
       ContactListMember,
       SmsDeliveryReceipt,
       InboundSms,
+      SmsSender,
     ]),
+    BillingModule,
     EmailModule,
     SmsModule,
     forwardRef(() => SmsSendersModule),
-    forwardRef(() => BillingModule),
   ],
   controllers: [
     CampaignsController,
@@ -71,8 +74,8 @@ import { TrackingBulkWorker } from './workers/tracking-bulk.worker';
     SmsPrepareWorker,
     SmsSendWorker,
     SmsRetryWorker,
-    // SmsBatchWorker, // Disabled: Uses Bull queues which are not configured. System uses RabbitMQ-based workers.
     SmsTrackingWorker,
+    SmsInboundWorker,
     TrackingBulkWorker,
   ],
   exports: [

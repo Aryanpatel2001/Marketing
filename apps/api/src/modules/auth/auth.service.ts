@@ -15,7 +15,6 @@ import { AuthProvider, User, UserRole } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { StripeService } from '../billing/services/stripe.service';
 import { WalletService } from '../billing/services/wallet.service';
-import { TransactionType } from '../billing/entities/wallet-transaction.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { AccessTokenPayload, RefreshTokenPayload, TokensDto } from './dto/tokens.dto';
@@ -24,8 +23,6 @@ export interface AuthResponse {
   user: Partial<User>;
   tokens: TokensDto;
 }
-
-const TRIAL_CREDITS = 100; // Free credits for trial users
 
 @Injectable()
 export class AuthService {
@@ -51,18 +48,36 @@ export class AuthService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    // Create tenant first
+    // Validate phone number region (will throw if not US or EU)
+    this.tenantsService.detectRegionFromPhone(dto.phoneNumber);
+
+    // Create tenant first with phone number for region detection
     const tenant = await this.tenantsService.create({
       name: dto.companyName || `${dto.firstName}'s Workspace`,
       billingEmail: dto.email,
+      phoneNumber: dto.phoneNumber,
     });
 
-    // Create Stripe customer and wallet for billing
-    await this.setupBillingForTenant(
-      tenant.id,
-      dto.email,
-      dto.companyName || `${dto.firstName}'s Workspace`
-    );
+    // Create Stripe customer if Stripe is configured
+    let stripeCustomerId: string | null = null;
+    if (this.stripeService.isConfigured()) {
+      try {
+        const stripeCustomer = await this.stripeService.createCustomer({
+          email: dto.email,
+          name: dto.companyName || `${dto.firstName} ${dto.lastName}`,
+          tenantId: tenant.id,
+        });
+        stripeCustomerId = stripeCustomer.id;
+
+        // Update tenant with Stripe customer ID
+        await this.tenantsService.update(tenant.id, { stripeCustomerId });
+
+        this.logger.log(`Created Stripe customer ${stripeCustomerId} for tenant ${tenant.id}`);
+      } catch (error) {
+        this.logger.error(`Failed to create Stripe customer: ${error.message}`);
+        // Continue without Stripe - billing features will be limited
+      }
+    }
 
     // Create user as owner of the tenant
     const user = await this.usersService.create({
@@ -72,9 +87,21 @@ export class AuthService {
       lastName: dto.lastName,
       tenantId: tenant.id,
       role: UserRole.OWNER,
-      phone: dto.phone,
+      phone: dto.phoneNumber,
       authProvider: AuthProvider.LOCAL,
     });
+
+    // Initialize wallet for the tenant
+    try {
+      await this.walletService.findOrCreateWallet(tenant.id);
+      this.logger.log(`Created wallet for tenant ${tenant.id}`);
+    } catch (error) {
+      this.logger.error(`Failed to create wallet: ${error.message}`);
+    }
+
+    // Note: Subscription is NOT created here - user will select plan in onboarding
+    // The checkout.session.completed webhook will create the subscription
+    this.logger.log(`Tenant ${tenant.id} created - awaiting plan selection in onboarding`);
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
@@ -84,7 +111,7 @@ export class AuthService {
     await this.usersService.updateRefreshToken(user.id, refreshTokenHash);
 
     return {
-      user: this.sanitizeUser(user),
+      user: this.sanitizeUser(user, tenant.region),
       tokens,
     };
   }
@@ -95,6 +122,9 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    // Fetch tenant to get region
+    const tenant = await this.tenantsService.findById(user.tenantId);
 
     // Update last login info
     await this.usersService.updateLastLogin(user.id, ip);
@@ -107,7 +137,7 @@ export class AuthService {
     await this.usersService.updateRefreshToken(user.id, refreshTokenHash);
 
     return {
-      user: this.sanitizeUser(user),
+      user: this.sanitizeUser(user, tenant?.region),
       tokens,
     };
   }
@@ -242,12 +272,22 @@ export class AuthService {
           billingEmail: googleUser.email,
         });
 
-        // Create Stripe customer and wallet for billing
-        await this.setupBillingForTenant(
-          tenant.id,
-          googleUser.email,
-          `${googleUser.firstName}'s Workspace`
-        );
+        // Create Stripe customer if Stripe is configured
+        let stripeCustomerId: string | null = null;
+        if (this.stripeService.isConfigured()) {
+          try {
+            const stripeCustomer = await this.stripeService.createCustomer({
+              email: googleUser.email,
+              name: `${googleUser.firstName} ${googleUser.lastName}`,
+              tenantId: tenant.id,
+            });
+            stripeCustomerId = stripeCustomer.id;
+            await this.tenantsService.update(tenant.id, { stripeCustomerId });
+            this.logger.log(`Created Stripe customer ${stripeCustomerId} for tenant ${tenant.id}`);
+          } catch (error) {
+            this.logger.error(`Failed to create Stripe customer: ${error.message}`);
+          }
+        }
 
         user = await this.usersService.create({
           email: googleUser.email,
@@ -263,6 +303,16 @@ export class AuthService {
         if (googleUser.avatar) {
           await this.usersService.update(user.id, { avatar: googleUser.avatar });
         }
+
+        // Initialize wallet for the tenant
+        try {
+          await this.walletService.findOrCreateWallet(tenant.id);
+        } catch (error) {
+          this.logger.error(`Failed to create wallet: ${error.message}`);
+        }
+
+        // Note: Subscription is NOT created here - user will select plan in onboarding
+        this.logger.log(`Tenant ${tenant.id} created via Google OAuth - awaiting plan selection`);
       }
     }
 
@@ -276,8 +326,11 @@ export class AuthService {
     // Update last login
     await this.usersService.updateLastLogin(user.id);
 
+    // Fetch tenant to get region
+    const userTenant = await this.tenantsService.findById(user.tenantId);
+
     return {
-      user: this.sanitizeUser(user),
+      user: this.sanitizeUser(user, userTenant?.region),
       tokens,
     };
   }
@@ -341,44 +394,14 @@ export class AuthService {
     }
   }
 
-  private sanitizeUser(user: User): Partial<User> {
+  private sanitizeUser(
+    user: User,
+    tenantRegion?: 'US' | 'EU'
+  ): Partial<User> & { tenantRegion?: 'US' | 'EU' } {
     const { password, refreshTokenHash, ...sanitized } = user;
-    return sanitized;
-  }
-
-  /**
-   * Set up billing infrastructure for a new tenant
-   * Creates Stripe customer, wallet, and adds trial credits
-   */
-  private async setupBillingForTenant(
-    tenantId: string,
-    email: string,
-    name: string
-  ): Promise<void> {
-    try {
-      // Create Stripe customer
-      const stripeCustomer = await this.stripeService.createCustomer(tenantId, email, name);
-
-      // Update tenant with Stripe customer ID
-      await this.tenantsService.updateStripeIds(tenantId, stripeCustomer.id);
-
-      // Create wallet for the tenant
-      await this.walletService.createWallet(tenantId);
-
-      // Add trial credits
-      await this.walletService.addCredits(
-        tenantId,
-        TRIAL_CREDITS,
-        TransactionType.SUBSCRIPTION_CREDIT,
-        undefined,
-        { reason: 'Trial signup credits' }
-      );
-
-      this.logger.log(`Billing setup complete for tenant ${tenantId}`);
-    } catch (error) {
-      // Log error but don't fail registration
-      // Billing can be set up later if needed
-      this.logger.error(`Failed to set up billing for tenant ${tenantId}:`, error);
-    }
+    return {
+      ...sanitized,
+      ...(tenantRegion && { tenantRegion }),
+    };
   }
 }

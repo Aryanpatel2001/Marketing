@@ -9,7 +9,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   FileText,
   Key,
   LayoutDashboard,
@@ -61,11 +60,6 @@ const settingsNavigation = [
     name: 'Settings',
     href: '/settings',
     icon: Settings,
-  },
-  {
-    name: 'Billing',
-    href: '/settings/billing',
-    icon: CreditCard,
   },
   {
     name: 'API Keys',

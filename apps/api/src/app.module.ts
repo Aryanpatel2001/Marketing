@@ -13,13 +13,13 @@ import { databaseConfig } from './config/database.config';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { TemplatesModule } from './modules/templates/templates.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { UsersModule } from './modules/users/users.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
-import { BillingModule } from './modules/billing/billing.module';
 import { SmsModule as SmsSendersModule } from './modules/sms/sms.module';
 
 // Provider Modules
@@ -89,8 +89,8 @@ import { HealthModule } from './health/health.module';
     AnalyticsModule,
     WebhooksModule,
     ApiKeysModule,
-    BillingModule,
     SmsSendersModule,
+    BillingModule,
 
     // Provider Modules
     EmailModule,

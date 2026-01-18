@@ -266,6 +266,7 @@ export class ImportController {
               updatedCount: job.updatedCount,
               skippedCount: job.skippedCount,
               errorCount: job.errorCount,
+              regionRejectedCount: 0,
               currentBatch: 0,
               totalBatches: 0,
               message:

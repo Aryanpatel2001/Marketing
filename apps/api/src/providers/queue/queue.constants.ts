@@ -68,6 +68,7 @@ export const ROUTING_KEYS = {
   // Webhook events
   WEBHOOK_SES: 'webhook.ses.notification',
   WEBHOOK_TWILIO: 'webhook.twilio.notification',
+  WEBHOOK_TWILIO_INBOUND: 'webhook.twilio.inbound',
 
   // Campaign lifecycle
   CAMPAIGN_START: 'campaign.lifecycle.start',
@@ -211,7 +212,17 @@ export const QUEUES = {
   },
   WEBHOOK_TWILIO: {
     name: 'webhook.twilio.queue',
-    routingKey: 'webhook.twilio.*',
+    routingKey: 'webhook.twilio.notification',
+    exchange: 'events',
+    options: {
+      durable: true,
+      messageTtl: 86400000,
+      maxLength: 100000,
+    },
+  },
+  WEBHOOK_TWILIO_INBOUND: {
+    name: 'webhook.twilio.inbound.queue',
+    routingKey: 'webhook.twilio.inbound',
     exchange: 'events',
     options: {
       durable: true,
@@ -382,6 +393,18 @@ export interface WebhookTwilioMessage {
   timestamp: Date;
   tenantId?: string; // Optional because legacy or untagged might not have it
   campaignId?: string;
+  payload: Record<string, any>;
+}
+
+export interface InboundSmsMessage {
+  messageSid: string;
+  from: string;
+  to: string;
+  body: string;
+  numMedia?: number;
+  mediaUrls?: string[];
+  timestamp: Date;
+  tenantId?: string;
   payload: Record<string, any>;
 }
 

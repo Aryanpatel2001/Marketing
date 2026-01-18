@@ -1,4 +1,4 @@
-import { WebhookTwilioMessage } from '@/providers/queue/queue.constants';
+import { InboundSmsMessage, WebhookTwilioMessage } from '@/providers/queue/queue.constants';
 import { QueueService } from '@/providers/queue/queue.service';
 import {
   BadRequestException,
@@ -8,8 +8,10 @@ import {
   Logger,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 
 @ApiTags('Webhooks')
 @Controller('sms/webhook')
@@ -54,5 +56,54 @@ export class SmsWebhookController {
     await this.queueService.publishTwilioWebhook(message);
 
     return { status: 'ok' };
+  }
+
+  @Post('inbound')
+  @ApiOperation({ summary: 'Handle inbound SMS messages from Twilio' })
+  @ApiResponse({ status: 200, description: 'Inbound SMS received' })
+  async handleInboundSms(
+    @Body() body: any,
+    @Headers('x-twilio-signature') signature: string,
+    @Query('tenantId') tenantId?: string,
+    @Res() res?: Response
+  ): Promise<void> {
+    this.logger.debug(`Received inbound SMS: ${JSON.stringify(body)}`);
+
+    // Basic validation - Twilio inbound messages have different fields
+    if (!body || !body.MessageSid || !body.From || !body.Body) {
+      this.logger.warn('Invalid inbound SMS payload');
+      res?.status(400).send('Invalid payload');
+      return;
+    }
+
+    // Extract media URLs if present
+    const mediaUrls: string[] = [];
+    const numMedia = parseInt(body.NumMedia, 10) || 0;
+    for (let i = 0; i < numMedia; i++) {
+      const mediaUrl = body[`MediaUrl${i}`];
+      if (mediaUrl) {
+        mediaUrls.push(mediaUrl);
+      }
+    }
+
+    // Map Twilio inbound payload to our message structure
+    const message: InboundSmsMessage = {
+      messageSid: body.MessageSid,
+      from: body.From,
+      to: body.To,
+      body: body.Body,
+      numMedia,
+      mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+      timestamp: new Date(),
+      tenantId: tenantId,
+      payload: body,
+    };
+
+    // Push to queue for async processing
+    await this.queueService.publishInboundSms(message);
+
+    // Return TwiML response (empty response means no auto-reply)
+    // Twilio expects XML response for inbound SMS
+    res?.type('text/xml').send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   }
 }

@@ -173,6 +173,48 @@ export class Campaign extends TenantSoftDeleteEntity {
   @Column({ name: 'replied_count', type: 'integer', default: 0 })
   repliedCount: number;
 
+  // Billing fields
+  @Column({ name: 'reserve_transaction_id', type: 'uuid', nullable: true })
+  reserveTransactionId: string | null;
+
+  @Column({ name: 'estimated_cost', type: 'decimal', precision: 10, scale: 4, default: 0 })
+  estimatedCost: number;
+
+  @Column({ name: 'actual_cost', type: 'decimal', precision: 10, scale: 4, default: 0 })
+  actualCost: number;
+
+  // ============================================
+  // Compliance Fields
+  // ============================================
+
+  /**
+   * US 10DLC TCR Campaign ID (for campaigns targeting US)
+   */
+  @Column({ name: 'tcr_campaign_id', type: 'varchar', length: 100, nullable: true })
+  tcrCampaignId: string | null;
+
+  /**
+   * Compliance approval status for the tenant's region
+   * Stored after pre-send compliance validation
+   */
+  @Column({ name: 'compliance_approval', type: 'jsonb', nullable: true })
+  complianceApproval: {
+    approved: boolean;
+    checkedAt: string;
+    errors?: string[];
+    warnings?: string[];
+  } | null;
+
+  /**
+   * Whether compliance was validated before sending
+   */
+  @Column({ name: 'compliance_validated', type: 'boolean', default: false })
+  complianceValidated: boolean;
+
+  // Additional metadata (compliance checks, A/B testing info, etc.)
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, unknown> | null;
+
   // Created by
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdById: string | null;

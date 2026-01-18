@@ -1,11 +1,20 @@
 import { ContactListMember } from '@/modules/contacts/entities/contact-list-member.entity';
 import { ChannelStatus, Contact, ContactStatus } from '@/modules/contacts/entities/contact.entity';
+import { ComplianceService } from '@/modules/sms/services/compliance.service';
+import { UsageService } from '@/modules/billing/services/usage.service';
+import { UsageChannel } from '@/modules/billing/dto/usage.dto';
+import { WalletService } from '@/modules/billing/services/wallet.service';
+import { PricingService } from '@/modules/billing/services/pricing.service';
+import {
+  TransactionChannel,
+  TransactionReferenceType,
+} from '@/modules/billing/entities/wallet-transaction.entity';
 import { EmailService, SendEmailOptions } from '@/providers/email/email.service';
 import { QueueService } from '@/providers/queue/queue.service';
 import { RedisCacheService } from '@/providers/redis/redis-cache.service';
 import { RedisCounterService } from '@/providers/redis/redis-counter.service';
 import { SmsService } from '@/providers/sms/sms.service';
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -82,7 +91,11 @@ export class CampaignSendService {
     private readonly counterService: RedisCounterService,
     private readonly cacheService: RedisCacheService,
     private readonly configService: ConfigService,
-    private readonly smsService: SmsService
+    private readonly smsService: SmsService,
+    private readonly complianceService: ComplianceService,
+    private readonly usageService: UsageService,
+    private readonly walletService: WalletService,
+    private readonly pricingService: PricingService
   ) {
     // Check if queue-based sending is enabled (handle string 'true')
     const queuedSendingValue = this.configService.get<string>('USE_QUEUED_SENDING', 'false');
@@ -107,6 +120,14 @@ export class CampaignSendService {
       throw new BadRequestException(`Cannot send campaign in ${campaign.status} status`);
     }
 
+    // Validate SMS compliance before starting campaign
+    if (campaign.type === CampaignType.SMS) {
+      await this.validateSmsComplianceForCampaign(tenantId, campaign);
+    }
+
+    // Validate billing/quota before starting campaign
+    await this.validateBillingForCampaign(tenantId, campaign);
+
     const initiatedAt = new Date();
     this.logger.log(
       `[CAMPAIGN SEND INITIATED] ID: ${campaignId} | Name: ${campaign.name} | ` +
@@ -121,6 +142,282 @@ export class CampaignSendService {
 
     // Fall back to direct sending
     return this.sendCampaignDirect(campaign);
+  }
+
+  /**
+   * Validate SMS compliance before starting a campaign
+   * Checks region-specific requirements (US 10DLC, India DLT, EU GDPR)
+   */
+  private async validateSmsComplianceForCampaign(
+    tenantId: string,
+    campaign: Campaign
+  ): Promise<void> {
+    const content = campaign.content as SmsContent;
+
+    // Get all recipient phone numbers for the campaign
+    const phoneNumbers = await this.getRecipientPhoneNumbers(campaign);
+
+    if (phoneNumbers.length === 0) {
+      return; // No recipients, nothing to validate
+    }
+
+    // Validate campaign compliance (uses tenant's region)
+    const complianceResult = await this.complianceService.validateCampaign(tenantId, phoneNumbers);
+
+    // Log compliance validation result
+    this.logger.log(
+      `[SMS COMPLIANCE CHECK] Campaign: ${campaign.id} | ` +
+        `Total: ${complianceResult.totalRecipients} | ` +
+        `Compliant: ${complianceResult.compliantRecipients} | ` +
+        `Blocked: ${complianceResult.blockedRecipients} | ` +
+        `CanSend: ${complianceResult.canSend}`
+    );
+
+    // If there are blocking errors in strict mode, throw an exception
+    if (!complianceResult.canSend) {
+      const errorMessages = complianceResult.errors
+        .filter((e) => e.blocking)
+        .map((e) => e.message)
+        .join('; ');
+
+      throw new ForbiddenException(
+        `SMS compliance check failed: ${errorMessages}. ` +
+          `${complianceResult.blockedRecipients} of ${complianceResult.totalRecipients} recipients would be blocked.`
+      );
+    }
+
+    // Log warnings even if we can send
+    if (complianceResult.warnings.length > 0) {
+      this.logger.warn(
+        `[SMS COMPLIANCE WARNINGS] Campaign: ${campaign.id} | ` +
+          `Warnings: ${complianceResult.warnings.map((w) => w.message).join('; ')}`
+      );
+    }
+
+    // Build compliance approval status (simplified - single region per tenant)
+    const complianceApproval = {
+      approved: complianceResult.canSend,
+      checkedAt: new Date().toISOString(),
+      errors: complianceResult.errors.map((e) => e.message),
+      warnings: complianceResult.warnings.map((w) => w.message),
+    };
+
+    // Update campaign with compliance status
+    await this.campaignRepository.update(campaign.id, {
+      complianceValidated: true,
+      complianceApproval,
+      metadata: {
+        ...((campaign.metadata as Record<string, unknown>) || {}),
+        complianceCheck: {
+          checkedAt: new Date().toISOString(),
+          totalRecipients: complianceResult.totalRecipients,
+          compliantRecipients: complianceResult.compliantRecipients,
+          blockedRecipients: complianceResult.blockedRecipients,
+          regionBreakdown: complianceResult.regionBreakdown,
+          warnings: complianceResult.warnings,
+        },
+      },
+    });
+  }
+
+  /**
+   * Validate billing/quota before starting a campaign
+   * Ensures tenant has sufficient quota or wallet balance
+   */
+  private async validateBillingForCampaign(tenantId: string, campaign: Campaign): Promise<void> {
+    try {
+      // Get recipient count for the campaign
+      const recipients = await this.getRecipients(campaign);
+      const recipientCount = recipients.length;
+
+      if (recipientCount === 0) {
+        return; // No recipients, nothing to validate
+      }
+
+      // Determine channel
+      let channel: UsageChannel;
+      switch (campaign.type) {
+        case CampaignType.SMS:
+          channel = UsageChannel.SMS;
+          break;
+        case CampaignType.EMAIL:
+          channel = UsageChannel.EMAIL;
+          break;
+        case CampaignType.WHATSAPP:
+          channel = UsageChannel.WHATSAPP;
+          break;
+        default:
+          return; // Unknown type, skip validation
+      }
+
+      // Check if tenant can send the messages
+      const canSendResult = await this.usageService.canSendMessages(
+        tenantId,
+        channel,
+        recipientCount
+      );
+
+      if (!canSendResult.canSend) {
+        throw new ForbiddenException(`Cannot send campaign: ${canSendResult.reason}`);
+      }
+
+      // Get cost estimate for logging
+      const quotaCheck = await this.usageService.checkQuota(tenantId, channel, recipientCount);
+      const unitPrice = this.pricingService.getUnitPrice(channel);
+      const estimatedCost = quotaCheck.needsWallet * unitPrice;
+
+      this.logger.log(
+        `[BILLING CHECK] Campaign: ${campaign.id} | Recipients: ${recipientCount} | ` +
+          `FromQuota: ${quotaCheck.quotaRemaining} | FromWallet: ${quotaCheck.needsWallet} | ` +
+          `EstimatedCost: $${estimatedCost.toFixed(4)}`
+      );
+    } catch (error: any) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+      // Log but don't block on billing validation errors
+      this.logger.warn(
+        `[BILLING CHECK] Validation error for campaign ${campaign.id}: ${error.message}`
+      );
+    }
+  }
+
+  /**
+   * Get recipient phone numbers for SMS campaign
+   */
+  private async getRecipientPhoneNumbers(campaign: Campaign): Promise<string[]> {
+    const { tenantId, audienceType, contactListIds } = campaign;
+
+    let query = this.contactRepository
+      .createQueryBuilder('contact')
+      .select('contact.phone')
+      .where('contact.tenantId = :tenantId', { tenantId })
+      .andWhere('contact.deletedAt IS NULL')
+      .andWhere('contact.status = :status', { status: ContactStatus.ACTIVE })
+      .andWhere('contact.phone IS NOT NULL')
+      .andWhere("contact.phone != ''")
+      .andWhere('contact.smsStatus = :smsStatus', { smsStatus: ChannelStatus.ACTIVE });
+
+    if (audienceType === 'list' && contactListIds && contactListIds.length > 0) {
+      const listMembers = await this.listMemberRepository.find({
+        where: { contactListId: In(contactListIds) },
+        select: ['contactId'],
+      });
+      const contactIds = [...new Set(listMembers.map((m) => m.contactId))];
+      if (contactIds.length === 0) return [];
+      query = query.andWhere('contact.id IN (:...contactIds)', { contactIds });
+    }
+
+    const contacts = await query.getMany();
+    return contacts.map((c) => c.phone).filter(Boolean) as string[];
+  }
+
+  /**
+   * Finalize campaign billing after completion
+   * Calculates actual costs and updates usage/wallet
+   */
+  async finalizeCampaignBilling(campaignId: string): Promise<void> {
+    try {
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        this.logger.warn(`[BILLING] Campaign ${campaignId} not found for billing finalization`);
+        return;
+      }
+
+      const { tenantId, type, sentCount = 0 } = campaign;
+
+      if (sentCount === 0) {
+        this.logger.debug(
+          `[BILLING] No messages sent for campaign ${campaignId}, skipping billing`
+        );
+        return;
+      }
+
+      // Determine channel for billing
+      let channel: UsageChannel;
+      let transactionChannel: TransactionChannel;
+
+      switch (type) {
+        case CampaignType.SMS:
+          channel = UsageChannel.SMS;
+          transactionChannel = TransactionChannel.SMS;
+          break;
+        case CampaignType.EMAIL:
+          channel = UsageChannel.EMAIL;
+          transactionChannel = TransactionChannel.EMAIL;
+          break;
+        case CampaignType.WHATSAPP:
+          channel = UsageChannel.WHATSAPP;
+          transactionChannel = TransactionChannel.WHATSAPP;
+          break;
+        default:
+          this.logger.warn(`[BILLING] Unknown campaign type ${type}, skipping billing`);
+          return;
+      }
+
+      // Get unit price for the channel
+      const unitPrice = this.pricingService.getUnitPrice(channel);
+
+      // Check quota and calculate overage
+      const quotaCheck = await this.usageService.checkQuota(tenantId, channel, sentCount);
+
+      // Messages covered by quota
+      const fromQuota = Math.min(sentCount, quotaCheck.quotaRemaining);
+      // Messages that need to be paid from wallet
+      const fromWallet = sentCount - fromQuota;
+      const walletCost = fromWallet * unitPrice;
+
+      this.logger.log(
+        `[BILLING] Campaign ${campaignId} | Sent: ${sentCount} | ` +
+          `FromQuota: ${fromQuota} | FromWallet: ${fromWallet} | Cost: $${walletCost.toFixed(4)}`
+      );
+
+      // Update usage tracking
+      await this.usageService.incrementUsage(tenantId, channel, sentCount, walletCost);
+
+      // Deduct from wallet if there's overage
+      if (fromWallet > 0 && walletCost > 0) {
+        await this.walletService.debit({
+          tenantId,
+          amount: walletCost,
+          channel: transactionChannel,
+          description: `Campaign ${campaign.name} - ${fromWallet} ${type.toLowerCase()} messages`,
+          referenceType: TransactionReferenceType.CAMPAIGN,
+          referenceId: campaignId,
+          messageCount: fromWallet,
+          unitPrice,
+        });
+
+        this.logger.log(
+          `[BILLING] Deducted $${walletCost.toFixed(4)} from tenant ${tenantId} wallet for campaign ${campaignId}`
+        );
+      }
+
+      // Update campaign with billing info
+      await this.campaignRepository.update(campaignId, {
+        metadata: {
+          ...((campaign.metadata as Record<string, unknown>) || {}),
+          billing: {
+            finalizedAt: new Date().toISOString(),
+            totalSent: sentCount,
+            fromQuota,
+            fromWallet,
+            unitPrice,
+            totalCost: walletCost,
+          },
+        },
+      });
+
+      this.logger.log(`[BILLING] Finalized billing for campaign ${campaignId}`);
+    } catch (error: any) {
+      this.logger.error(
+        `[BILLING] Failed to finalize billing for campaign ${campaignId}: ${error.message}`
+      );
+      // Don't throw - billing errors shouldn't fail campaign completion
+    }
   }
 
   /**
