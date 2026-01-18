@@ -1,206 +1,234 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
-import { SubscriptionPlan } from '../../tenants/entities/tenant.entity';
-import { BillingInterval, CheckoutPlan } from '../dto/create-checkout-session.dto';
-import { CreditPackage } from '../dto/purchase-credits.dto';
-
-export interface CreateCheckoutParams {
-  tenantId: string;
-  customerId: string;
-  priceId: string;
-  successUrl: string;
-  cancelUrl: string;
-  mode: 'subscription' | 'payment';
-  metadata?: Record<string, string>;
-}
-
-export interface CreatePaymentIntentParams {
-  customerId: string;
-  amount: number;
-  currency: string;
-  metadata?: Record<string, string>;
-}
 
 @Injectable()
-export class StripeService {
-  private readonly stripe: Stripe;
+export class StripeService implements OnModuleInit {
   private readonly logger = new Logger(StripeService.name);
-  private readonly webhookSecret: string;
-  private readonly priceIds: Record<string, string>;
-  private readonly creditPricing: {
-    pricePerCredit: number;
-    packages: Array<{ id: CreditPackage; credits: number; price: number }>;
-  };
+  private stripe: Stripe;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {}
+
+  onModuleInit() {
     const secretKey = this.configService.get<string>('stripe.secretKey');
     if (!secretKey) {
-      this.logger.warn('Stripe secret key not configured');
+      this.logger.warn('Stripe secret key not configured. Payment features will be disabled.');
+      return;
     }
 
-    this.stripe = new Stripe(secretKey || '', {
+    this.stripe = new Stripe(secretKey, {
       apiVersion: '2023-10-16',
+      typescript: true,
     });
-
-    this.webhookSecret = this.configService.get<string>('stripe.webhookSecret') || '';
-
-    // Map app plans to Stripe price IDs:
-    // - App's "Starter" ($29) → Stripe's "Pro" price ID (STRIPE_PRICE_PRO_MONTHLY)
-    // - App's "Pro" ($99) → Stripe's "Enterprise" price ID (STRIPE_PRICE_ENTERPRISE_MONTHLY)
-    this.priceIds = {
-      starterMonthly: this.configService.get<string>('stripe.prices.proMonthly') || '', // $29
-      starterYearly: this.configService.get<string>('stripe.prices.proMonthly') || '',
-      growthMonthly: this.configService.get<string>('stripe.prices.growthMonthly') || '',
-      growthYearly: this.configService.get<string>('stripe.prices.growthYearly') || '',
-      proMonthly: this.configService.get<string>('stripe.prices.enterpriseMonthly') || '', // $99
-      proYearly: this.configService.get<string>('stripe.prices.enterpriseMonthly') || '',
-    };
-
-    this.creditPricing = {
-      pricePerCredit: this.configService.get<number>('stripe.creditPricing.pricePerCredit') || 0.05,
-      packages: [
-        { id: CreditPackage.PACK_100, credits: 100, price: 500 },
-        { id: CreditPackage.PACK_500, credits: 500, price: 2000 },
-        { id: CreditPackage.PACK_1000, credits: 1000, price: 3500 },
-        { id: CreditPackage.PACK_5000, credits: 5000, price: 15000 },
-      ],
-    };
+    this.logger.log('Stripe client initialized');
   }
 
-  // ============================================
-  // Customer Management
-  // ============================================
+  isConfigured(): boolean {
+    return !!this.stripe;
+  }
 
-  async createCustomer(tenantId: string, email: string, name: string): Promise<Stripe.Customer> {
-    this.logger.log(`Creating Stripe customer for tenant ${tenantId}`);
+  // ==================== CUSTOMERS ====================
 
+  async createCustomer(params: {
+    email: string;
+    name: string;
+    tenantId: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Customer> {
     return this.stripe.customers.create({
-      email,
-      name,
-      metadata: {
-        tenantId,
-      },
-    });
-  }
-
-  async getCustomer(customerId: string): Promise<Stripe.Customer | null> {
-    try {
-      const customer = await this.stripe.customers.retrieve(customerId);
-      if (customer.deleted) {
-        return null;
-      }
-      return customer as Stripe.Customer;
-    } catch (error) {
-      this.logger.error(`Failed to get customer ${customerId}:`, error);
-      return null;
-    }
-  }
-
-  async updateCustomer(
-    customerId: string,
-    data: Stripe.CustomerUpdateParams
-  ): Promise<Stripe.Customer> {
-    return this.stripe.customers.update(customerId, data);
-  }
-
-  // ============================================
-  // Subscription Management
-  // ============================================
-
-  async createCheckoutSession(params: CreateCheckoutParams): Promise<Stripe.Checkout.Session> {
-    this.logger.log(`Creating checkout session for tenant ${params.tenantId}`);
-
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      customer: params.customerId,
-      mode: params.mode,
-      success_url: params.successUrl,
-      cancel_url: params.cancelUrl,
+      email: params.email,
+      name: params.name,
       metadata: {
         tenantId: params.tenantId,
         ...params.metadata,
       },
+    });
+  }
+
+  async getCustomer(customerId: string): Promise<Stripe.Customer | Stripe.DeletedCustomer> {
+    return this.stripe.customers.retrieve(customerId);
+  }
+
+  async updateCustomer(
+    customerId: string,
+    params: Stripe.CustomerUpdateParams
+  ): Promise<Stripe.Customer> {
+    return this.stripe.customers.update(customerId, params);
+  }
+
+  async deleteCustomer(customerId: string): Promise<Stripe.DeletedCustomer> {
+    return this.stripe.customers.del(customerId);
+  }
+
+  // ==================== SUBSCRIPTIONS ====================
+
+  async createSubscription(params: {
+    customerId: string;
+    priceId: string;
+    trialDays?: number;
+    metadata?: Record<string, string>;
+    paymentMethodId?: string;
+  }): Promise<Stripe.Subscription> {
+    const subscriptionParams: Stripe.SubscriptionCreateParams = {
+      customer: params.customerId,
+      items: [{ price: params.priceId }],
+      metadata: params.metadata,
+      payment_behavior: 'default_incomplete',
+      payment_settings: {
+        save_default_payment_method: 'on_subscription',
+      },
+      expand: ['latest_invoice.payment_intent'],
+    };
+
+    if (params.trialDays && params.trialDays > 0) {
+      subscriptionParams.trial_period_days = params.trialDays;
+    }
+
+    if (params.paymentMethodId) {
+      subscriptionParams.default_payment_method = params.paymentMethodId;
+    }
+
+    return this.stripe.subscriptions.create(subscriptionParams);
+  }
+
+  async getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    return this.stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ['latest_invoice', 'default_payment_method'],
+    });
+  }
+
+  async updateSubscription(
+    subscriptionId: string,
+    params: Stripe.SubscriptionUpdateParams
+  ): Promise<Stripe.Subscription> {
+    return this.stripe.subscriptions.update(subscriptionId, params);
+  }
+
+  async cancelSubscription(
+    subscriptionId: string,
+    cancelAtPeriodEnd: boolean = true
+  ): Promise<Stripe.Subscription> {
+    if (cancelAtPeriodEnd) {
+      return this.stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+    }
+    return this.stripe.subscriptions.cancel(subscriptionId);
+  }
+
+  async reactivateSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    return this.stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false,
+    });
+  }
+
+  async changeSubscriptionPlan(
+    subscriptionId: string,
+    newPriceId: string,
+    prorate: boolean = true
+  ): Promise<Stripe.Subscription> {
+    const subscription = await this.getSubscription(subscriptionId);
+    const currentItemId = subscription.items.data[0].id;
+
+    return this.stripe.subscriptions.update(subscriptionId, {
+      items: [
+        {
+          id: currentItemId,
+          price: newPriceId,
+        },
+      ],
+      proration_behavior: prorate ? 'create_prorations' : 'none',
+    });
+  }
+
+  // ==================== CHECKOUT SESSIONS ====================
+
+  async createCheckoutSession(params: {
+    customerId: string;
+    priceId: string;
+    successUrl: string;
+    cancelUrl: string;
+    mode: 'subscription' | 'payment';
+    trialDays?: number;
+    metadata?: Record<string, string>;
+    paymentMethodCollection?: 'always' | 'if_required';
+  }): Promise<Stripe.Checkout.Session> {
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      customer: params.customerId,
       line_items: [
         {
           price: params.priceId,
           quantity: 1,
         },
       ],
+      mode: params.mode,
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: params.metadata,
+      // Always collect payment method for subscriptions (required for trials)
+      payment_method_collection: params.paymentMethodCollection || 'always',
     };
 
     if (params.mode === 'subscription') {
-      sessionParams.subscription_data = {
-        metadata: {
-          tenantId: params.tenantId,
-        },
+      const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
+        metadata: params.metadata,
       };
-    }
 
-    if (params.mode === 'payment') {
-      sessionParams.payment_intent_data = {
-        metadata: {
-          tenantId: params.tenantId,
-          ...params.metadata,
-        },
-      };
+      if (params.trialDays && params.trialDays > 0) {
+        subscriptionData.trial_period_days = params.trialDays;
+      }
+
+      sessionParams.subscription_data = subscriptionData;
     }
 
     return this.stripe.checkout.sessions.create(sessionParams);
   }
 
-  async createBillingPortalSession(
-    customerId: string,
-    returnUrl: string
-  ): Promise<Stripe.BillingPortal.Session> {
-    return this.stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: returnUrl,
+  async createTopUpCheckoutSession(params: {
+    customerId: string;
+    amount: number;
+    currency: string;
+    successUrl: string;
+    cancelUrl: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Checkout.Session> {
+    return this.stripe.checkout.sessions.create({
+      customer: params.customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: params.currency.toLowerCase(),
+            product_data: {
+              name: 'Wallet Top-Up',
+              description: `Add ${params.currency} ${params.amount.toFixed(2)} to your wallet`,
+            },
+            unit_amount: Math.round(params.amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata: {
+        type: 'wallet_topup',
+        amount: params.amount.toString(),
+        ...params.metadata,
+      },
     });
   }
 
-  async getSubscription(subscriptionId: string): Promise<Stripe.Subscription | null> {
-    try {
-      return await this.stripe.subscriptions.retrieve(subscriptionId);
-    } catch (error) {
-      this.logger.error(`Failed to get subscription ${subscriptionId}:`, error);
-      return null;
-    }
-  }
-
-  async cancelSubscription(
-    subscriptionId: string,
-    immediately = false
-  ): Promise<Stripe.Subscription> {
-    if (immediately) {
-      return this.stripe.subscriptions.cancel(subscriptionId);
-    }
-
-    return this.stripe.subscriptions.update(subscriptionId, {
-      cancel_at_period_end: true,
+  async getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
+    return this.stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['subscription', 'payment_intent'],
     });
   }
 
-  async resumeSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
-    return this.stripe.subscriptions.update(subscriptionId, {
-      cancel_at_period_end: false,
-    });
-  }
-
-  // ============================================
-  // Payment Methods
-  // ============================================
-
-  async listPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
-    const methods = await this.stripe.paymentMethods.list({
-      customer: customerId,
-      type: 'card',
-    });
-    return methods.data;
-  }
+  // ==================== PAYMENT METHODS ====================
 
   async attachPaymentMethod(
-    customerId: string,
-    paymentMethodId: string
+    paymentMethodId: string,
+    customerId: string
   ): Promise<Stripe.PaymentMethod> {
     return this.stripe.paymentMethods.attach(paymentMethodId, {
       customer: customerId,
@@ -209,6 +237,14 @@ export class StripeService {
 
   async detachPaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
     return this.stripe.paymentMethods.detach(paymentMethodId);
+  }
+
+  async listPaymentMethods(customerId: string): Promise<Stripe.PaymentMethod[]> {
+    const result = await this.stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+    });
+    return result.data;
   }
 
   async setDefaultPaymentMethod(
@@ -222,126 +258,125 @@ export class StripeService {
     });
   }
 
-  // ============================================
-  // One-time Payments (Credits)
-  // ============================================
+  // ==================== PAYMENT INTENTS ====================
 
-  async createPaymentIntent(params: CreatePaymentIntentParams): Promise<Stripe.PaymentIntent> {
-    return this.stripe.paymentIntents.create({
-      amount: params.amount,
-      currency: params.currency,
+  async createPaymentIntent(params: {
+    amount: number;
+    currency: string;
+    customerId: string;
+    metadata?: Record<string, string>;
+    paymentMethodId?: string;
+    confirm?: boolean;
+  }): Promise<Stripe.PaymentIntent> {
+    const intentParams: Stripe.PaymentIntentCreateParams = {
+      amount: Math.round(params.amount * 100),
+      currency: params.currency.toLowerCase(),
       customer: params.customerId,
-      metadata: params.metadata || {},
+      metadata: params.metadata,
       automatic_payment_methods: {
         enabled: true,
       },
-    });
+    };
+
+    if (params.paymentMethodId) {
+      intentParams.payment_method = params.paymentMethodId;
+      intentParams.confirm = params.confirm ?? false;
+    }
+
+    return this.stripe.paymentIntents.create(intentParams);
   }
 
-  // ============================================
-  // Invoices
-  // ============================================
+  async getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.retrieve(paymentIntentId);
+  }
 
-  async listInvoices(customerId: string, limit = 10): Promise<Stripe.Invoice[]> {
-    const invoices = await this.stripe.invoices.list({
+  async confirmPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.confirm(paymentIntentId);
+  }
+
+  // ==================== INVOICES ====================
+
+  async getInvoice(invoiceId: string): Promise<Stripe.Invoice> {
+    return this.stripe.invoices.retrieve(invoiceId);
+  }
+
+  async listInvoices(customerId: string, limit: number = 10): Promise<Stripe.Invoice[]> {
+    const result = await this.stripe.invoices.list({
       customer: customerId,
       limit,
     });
-    return invoices.data;
+    return result.data;
   }
 
-  async getInvoice(invoiceId: string): Promise<Stripe.Invoice | null> {
+  async getUpcomingInvoice(customerId: string): Promise<Stripe.UpcomingInvoice | null> {
     try {
-      return await this.stripe.invoices.retrieve(invoiceId);
+      return await this.stripe.invoices.retrieveUpcoming({
+        customer: customerId,
+      });
     } catch (error) {
-      this.logger.error(`Failed to get invoice ${invoiceId}:`, error);
-      return null;
-    }
-  }
-
-  // ============================================
-  // Webhooks
-  // ============================================
-
-  verifyWebhookSignature(payload: Buffer, signature: string): Stripe.Event {
-    if (!this.webhookSecret) {
-      throw new BadRequestException('Webhook secret not configured');
-    }
-
-    try {
-      return this.stripe.webhooks.constructEvent(payload, signature, this.webhookSecret);
-    } catch (error) {
-      this.logger.error('Webhook signature verification failed:', error);
-      throw new BadRequestException('Invalid webhook signature');
-    }
-  }
-
-  // ============================================
-  // Price Mapping
-  // ============================================
-
-  getPriceId(plan: CheckoutPlan, interval: BillingInterval): string {
-    const key = `${plan}${interval === BillingInterval.MONTHLY ? 'Monthly' : 'Yearly'}`;
-    const priceId = this.priceIds[key];
-
-    if (!priceId) {
-      throw new BadRequestException(`Price not configured for ${plan} ${interval}`);
-    }
-
-    return priceId;
-  }
-
-  getPlanFromPriceId(priceId: string): SubscriptionPlan {
-    for (const [key, value] of Object.entries(this.priceIds)) {
-      if (value === priceId) {
-        if (key.startsWith('starter')) return SubscriptionPlan.STARTER;
-        if (key.startsWith('growth')) return SubscriptionPlan.GROWTH;
-        if (key.startsWith('pro')) return SubscriptionPlan.PRO;
+      if (error.code === 'invoice_upcoming_none') {
+        return null;
       }
+      throw error;
     }
-    return SubscriptionPlan.FREE;
   }
 
-  // ============================================
-  // Credit Packages
-  // ============================================
+  // ==================== BILLING PORTAL ====================
 
-  getCreditPackages() {
-    const basePrice = this.creditPricing.pricePerCredit * 100; // Convert to cents
-
-    return this.creditPricing.packages.map((pkg) => {
-      const pricePerCredit = pkg.price / pkg.credits;
-      const discountPercent = Math.round((1 - pricePerCredit / basePrice) * 100);
-
-      return {
-        id: pkg.id,
-        credits: pkg.credits,
-        price: pkg.price,
-        currency: 'USD',
-        pricePerCredit,
-        discountPercent: Math.max(0, discountPercent),
-      };
+  async createBillingPortalSession(params: {
+    customerId: string;
+    returnUrl: string;
+  }): Promise<Stripe.BillingPortal.Session> {
+    return this.stripe.billingPortal.sessions.create({
+      customer: params.customerId,
+      return_url: params.returnUrl,
     });
   }
 
-  getCreditPackagePrice(
-    packageId: CreditPackage,
-    customAmount?: number
-  ): { credits: number; price: number } {
-    if (packageId === CreditPackage.CUSTOM) {
-      if (!customAmount || customAmount < 100) {
-        throw new BadRequestException('Custom amount must be at least 100 credits');
-      }
-      // Custom pricing at base rate (no discount)
-      const price = Math.round(customAmount * this.creditPricing.pricePerCredit * 100);
-      return { credits: customAmount, price };
+  // ==================== WEBHOOKS ====================
+
+  constructWebhookEvent(payload: Buffer, signature: string): Stripe.Event {
+    const webhookSecret = this.configService.get<string>('stripe.webhookSecret');
+    if (!webhookSecret) {
+      throw new Error('Stripe webhook secret not configured');
+    }
+    return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+  }
+
+  // ==================== PRODUCTS & PRICES ====================
+
+  async getProduct(productId: string): Promise<Stripe.Product> {
+    return this.stripe.products.retrieve(productId);
+  }
+
+  async getPrice(priceId: string): Promise<Stripe.Price> {
+    return this.stripe.prices.retrieve(priceId);
+  }
+
+  async listPrices(productId: string): Promise<Stripe.Price[]> {
+    const result = await this.stripe.prices.list({
+      product: productId,
+      active: true,
+    });
+    return result.data;
+  }
+
+  // ==================== REFUNDS ====================
+
+  async createRefund(params: {
+    paymentIntentId: string;
+    amount?: number;
+    reason?: Stripe.RefundCreateParams.Reason;
+  }): Promise<Stripe.Refund> {
+    const refundParams: Stripe.RefundCreateParams = {
+      payment_intent: params.paymentIntentId,
+      reason: params.reason,
+    };
+
+    if (params.amount) {
+      refundParams.amount = Math.round(params.amount * 100);
     }
 
-    const pkg = this.creditPricing.packages.find((p) => p.id === packageId);
-    if (!pkg) {
-      throw new BadRequestException('Invalid credit package');
-    }
-
-    return { credits: pkg.credits, price: pkg.price };
+    return this.stripe.refunds.create(refundParams);
   }
 }

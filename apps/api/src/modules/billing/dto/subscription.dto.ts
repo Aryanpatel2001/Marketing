@@ -1,136 +1,193 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { SubscriptionPlan, TenantStatus } from '../../tenants/entities/tenant.entity';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { PlanTier } from '../entities/subscription-plan.entity';
 
-export class SubscriptionDto {
-  @ApiProperty({ enum: SubscriptionPlan })
-  plan: SubscriptionPlan;
+export class CreateSubscriptionDto {
+  @ApiProperty({ enum: PlanTier, description: 'Plan tier to subscribe to' })
+  @IsEnum(PlanTier)
+  @IsNotEmpty()
+  planTier: PlanTier;
 
-  @ApiProperty({ enum: TenantStatus })
-  status: TenantStatus;
+  @ApiPropertyOptional({ description: 'Stripe payment method ID' })
+  @IsString()
+  @IsOptional()
+  paymentMethodId?: string;
 
-  @ApiPropertyOptional()
-  stripeSubscriptionId?: string;
-
-  @ApiPropertyOptional()
-  stripeCustomerId?: string;
-
-  @ApiProperty()
-  isTrial: boolean;
-
-  @ApiPropertyOptional()
-  trialEndsAt?: Date;
-
-  @ApiPropertyOptional()
-  currentPeriodStart?: Date;
-
-  @ApiPropertyOptional()
-  currentPeriodEnd?: Date;
-
-  @ApiPropertyOptional()
-  cancelAtPeriodEnd?: boolean;
-
-  @ApiProperty()
-  limits: {
-    maxContacts: number;
-    maxCampaignsPerMonth: number;
-    maxEmailsPerMonth: number;
-    maxSmsPerMonth: number;
-    maxUsersPerTenant: number;
-  };
+  @ApiPropertyOptional({ description: 'Coupon code for discount' })
+  @IsString()
+  @IsOptional()
+  couponCode?: string;
 }
 
-export class SubscriptionPlanInfoDto {
-  @ApiProperty({ enum: SubscriptionPlan })
-  plan: SubscriptionPlan;
+export class UpdateSubscriptionDto {
+  @ApiProperty({ enum: PlanTier, description: 'New plan tier' })
+  @IsEnum(PlanTier)
+  @IsNotEmpty()
+  planTier: PlanTier;
+
+  @ApiPropertyOptional({ description: 'Prorate the change immediately' })
+  @IsOptional()
+  prorate?: boolean;
+}
+
+export class CancelSubscriptionDto {
+  @ApiPropertyOptional({ description: 'Cancel at period end or immediately' })
+  @IsOptional()
+  cancelAtPeriodEnd?: boolean;
+
+  @ApiPropertyOptional({ description: 'Reason for cancellation' })
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}
+
+export class CreateCheckoutSessionDto {
+  @ApiProperty({ enum: PlanTier, description: 'Plan tier for checkout' })
+  @IsEnum(PlanTier)
+  @IsNotEmpty()
+  planTier: PlanTier;
+
+  @ApiPropertyOptional({ description: 'Success redirect URL' })
+  @IsString()
+  @IsOptional()
+  successUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Cancel redirect URL' })
+  @IsString()
+  @IsOptional()
+  cancelUrl?: string;
+}
+
+export class SubscriptionResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  planId: string;
+
+  @ApiProperty()
+  planName: string;
+
+  @ApiProperty({ enum: PlanTier })
+  planTier: PlanTier;
+
+  @ApiProperty()
+  status: string;
+
+  @ApiProperty({ nullable: true })
+  currentPeriodStart: Date | null;
+
+  @ApiProperty({ nullable: true })
+  currentPeriodEnd: Date | null;
+
+  @ApiProperty({ nullable: true })
+  trialEnd: Date | null;
+
+  @ApiProperty()
+  cancelAtPeriodEnd: boolean;
+
+  @ApiProperty({ nullable: true })
+  cancelledAt: Date | null;
+
+  @ApiProperty()
+  price: number;
+
+  @ApiProperty()
+  interval: string;
+}
+
+export class PlanResponseDto {
+  @ApiProperty()
+  id: string;
 
   @ApiProperty()
   name: string;
+
+  @ApiProperty({ enum: PlanTier })
+  tier: PlanTier;
 
   @ApiProperty()
   description: string;
 
   @ApiProperty()
-  monthlyPrice: number;
+  price: number;
 
   @ApiProperty()
-  yearlyPrice: number;
-
-  @ApiPropertyOptional()
-  popular?: boolean;
+  interval: string;
 
   @ApiProperty()
-  features: string[];
+  smsQuota: number;
 
   @ApiProperty()
-  limits: {
-    maxContacts: number;
-    maxCampaignsPerMonth: number;
-    maxEmailsPerMonth: number;
-    maxSmsPerMonth: number;
-    maxUsersPerTenant: number;
-  };
+  emailQuota: number;
+
+  @ApiProperty()
+  whatsappQuota: number;
+
+  @ApiProperty()
+  maxContacts: number;
+
+  @ApiProperty()
+  maxSenders: number;
+
+  @ApiProperty()
+  maxUsers: number;
+
+  @ApiProperty()
+  features: Record<string, boolean>;
+
+  @ApiProperty()
+  trialDays: number;
 }
 
-export class PaymentMethodDto {
+export class InvoiceResponseDto {
   @ApiProperty()
   id: string;
 
   @ApiProperty()
-  stripePaymentMethodId: string;
-
-  @ApiProperty()
-  type: string;
-
-  @ApiProperty()
-  isDefault: boolean;
-
-  @ApiPropertyOptional()
-  brand?: string;
-
-  @ApiPropertyOptional()
-  lastFour?: string;
-
-  @ApiPropertyOptional()
-  expMonth?: number;
-
-  @ApiPropertyOptional()
-  expYear?: number;
-}
-
-export class InvoiceDto {
-  @ApiProperty()
-  id: string;
-
-  @ApiProperty()
-  stripeInvoiceId: string;
+  invoiceNumber: string;
 
   @ApiProperty()
   status: string;
 
   @ApiProperty()
-  amount: number;
+  total: number;
 
   @ApiProperty()
   amountPaid: number;
 
   @ApiProperty()
+  amountDue: number;
+
+  @ApiProperty()
   currency: string;
 
-  @ApiPropertyOptional()
-  invoiceNumber?: string;
+  @ApiProperty({ nullable: true })
+  invoiceUrl: string | null;
 
-  @ApiPropertyOptional()
-  invoiceUrl?: string;
+  @ApiProperty({ nullable: true })
+  pdfUrl: string | null;
 
-  @ApiPropertyOptional()
-  pdfUrl?: string;
+  @ApiProperty({ nullable: true })
+  periodStart: Date | null;
 
-  @ApiPropertyOptional()
-  dueDate?: Date;
+  @ApiProperty({ nullable: true })
+  periodEnd: Date | null;
 
-  @ApiPropertyOptional()
-  paidAt?: Date;
+  @ApiProperty({ nullable: true })
+  dueDate: Date | null;
+
+  @ApiProperty({ nullable: true })
+  paidAt: Date | null;
 
   @ApiProperty()
   createdAt: Date;
+}
+
+export class InvoiceListResponseDto {
+  @ApiProperty({ type: [InvoiceResponseDto] })
+  data: InvoiceResponseDto[];
+
+  @ApiProperty()
+  total: number;
 }

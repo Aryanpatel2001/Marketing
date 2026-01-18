@@ -1,48 +1,82 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Entities
-import { Campaign } from '../campaigns/entities/campaign.entity';
-import { Contact } from '../contacts/entities/contact.entity';
-import { Invoice } from './entities/invoice.entity';
-import { PaymentMethod } from './entities/payment-method.entity';
-import { WalletTransaction } from './entities/wallet-transaction.entity';
-import { Wallet } from './entities/wallet.entity';
+import {
+  SubscriptionPlan,
+  TenantSubscription,
+  UsageQuota,
+  Wallet,
+  WalletTransaction,
+  Invoice,
+} from './entities';
+import { Tenant } from '@/modules/tenants/entities/tenant.entity';
 
 // Services
-import { InvoiceService } from './services/invoice.service';
-import { StripeService } from './services/stripe.service';
-import { SubscriptionService } from './services/subscription.service';
-import { WalletService } from './services/wallet.service';
+import {
+  StripeService,
+  SubscriptionService,
+  WalletService,
+  UsageService,
+  PricingService,
+} from './services';
 
 // Controllers
-import { BillingController } from './controllers/billing.controller';
-import { StripeWebhookController } from './controllers/stripe-webhook.controller';
-import { WalletController } from './controllers/wallet.controller';
+import {
+  SubscriptionController,
+  WalletController,
+  UsageController,
+  StripeWebhookController,
+} from './controllers';
 
-// External modules
-import { EmailModule } from '../../providers/email/email.module';
-import { RedisModule } from '../../providers/redis/redis.module';
-import { TenantsModule } from '../tenants/tenants.module';
+// Guards
+import { BillingGuard, ActiveSubscriptionGuard } from './guards/billing.guard';
+
+// Listeners
+import { UsageNotificationListener } from './listeners/usage-notification.listener';
 
 @Module({
   imports: [
+    ConfigModule,
+    ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([
+      SubscriptionPlan,
+      TenantSubscription,
+      UsageQuota,
       Wallet,
       WalletTransaction,
       Invoice,
-      PaymentMethod,
-      Contact,
-      Campaign,
+      Tenant,
     ]),
-    ConfigModule,
-    forwardRef(() => TenantsModule),
-    RedisModule,
-    EmailModule,
   ],
-  controllers: [BillingController, WalletController, StripeWebhookController],
-  providers: [StripeService, WalletService, SubscriptionService, InvoiceService],
-  exports: [StripeService, WalletService, SubscriptionService, InvoiceService],
+  controllers: [SubscriptionController, WalletController, UsageController, StripeWebhookController],
+  providers: [
+    // Services
+    StripeService,
+    SubscriptionService,
+    WalletService,
+    UsageService,
+    PricingService,
+    // Guards
+    BillingGuard,
+    ActiveSubscriptionGuard,
+    // Listeners
+    UsageNotificationListener,
+  ],
+  exports: [
+    // Services for use in other modules
+    StripeService,
+    SubscriptionService,
+    WalletService,
+    UsageService,
+    PricingService,
+    // Guards
+    BillingGuard,
+    ActiveSubscriptionGuard,
+    // TypeORM for entity access
+    TypeOrmModule,
+  ],
 })
 export class BillingModule {}
