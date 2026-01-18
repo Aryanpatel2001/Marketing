@@ -1,142 +1,88 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { CurrentTenant } from '../../../common/decorators';
+import { Controller, Get, Post, Put, Body, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { CurrentUser } from '@/common/decorators';
 import { WalletService } from '../services/wallet.service';
-import { StripeService } from '../services/stripe.service';
-import { TenantsService } from '../../tenants/tenants.service';
-import { WalletBalanceDto, WalletTransactionDto, FilterTransactionsDto } from '../dto/wallet.dto';
 import {
-  PurchaseCreditsDto,
-  PurchaseCreditsResponseDto,
-  CreditPackageDto,
-  CreditPackage,
-} from '../dto/purchase-credits.dto';
+  CreateTopUpSessionDto,
+  UpdateWalletSettingsDto,
+  WalletResponseDto,
+  TransactionQueryDto,
+  TransactionListResponseDto,
+} from '../dto/wallet.dto';
 
-@ApiTags('Wallet')
-@ApiBearerAuth('JWT-auth')
+@ApiTags('Billing - Wallet')
+@Controller('billing/wallet')
 @UseGuards(JwtAuthGuard)
-@Controller('wallet')
+@ApiBearerAuth('JWT-auth')
 export class WalletController {
-  constructor(
-    private readonly walletService: WalletService,
-    private readonly stripeService: StripeService,
-    private readonly tenantsService: TenantsService
-  ) {}
+  constructor(private readonly walletService: WalletService) {}
 
-  @Get('balance')
-  @ApiOperation({ summary: 'Get wallet balance and credit information' })
-  @ApiResponse({ status: 200, description: 'Wallet balance', type: WalletBalanceDto })
-  async getBalance(@CurrentTenant() tenantId: string): Promise<WalletBalanceDto> {
-    return this.walletService.getBalance(tenantId);
+  @Get()
+  @ApiOperation({ summary: 'Get wallet balance and settings' })
+  @ApiResponse({ status: 200, type: WalletResponseDto })
+  async getWallet(@CurrentUser() user: any): Promise<WalletResponseDto> {
+    return this.walletService.getWallet(user.tenantId);
   }
 
-  @Get('packages')
-  @ApiOperation({ summary: 'Get available credit packages' })
-  @ApiResponse({ status: 200, description: 'List of credit packages', type: [CreditPackageDto] })
-  async getCreditPackages(): Promise<CreditPackageDto[]> {
-    return this.stripeService.getCreditPackages();
+  @Put('settings')
+  @ApiOperation({ summary: 'Update wallet settings' })
+  @ApiResponse({ status: 200, type: WalletResponseDto })
+  async updateSettings(
+    @CurrentUser() user: any,
+    @Body() dto: UpdateWalletSettingsDto
+  ): Promise<WalletResponseDto> {
+    return this.walletService.updateWalletSettings(user.tenantId, dto);
   }
 
-  @Post('credits')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Create payment intent for credit purchase' })
+  @Post('topup')
+  @ApiOperation({ summary: 'Create top-up checkout session' })
   @ApiResponse({
-    status: 200,
-    description: 'Payment intent created',
-    type: PurchaseCreditsResponseDto,
+    status: 201,
+    schema: { properties: { url: { type: 'string' }, sessionId: { type: 'string' } } },
   })
-  async purchaseCredits(
-    @CurrentTenant() tenantId: string,
-    @Body() dto: PurchaseCreditsDto
-  ): Promise<PurchaseCreditsResponseDto> {
-    const tenant = await this.tenantsService.findById(tenantId);
-    if (!tenant?.stripeCustomerId) {
-      throw new Error('Stripe customer not found. Please complete account setup.');
-    }
-
-    const { credits, price } = this.stripeService.getCreditPackagePrice(
-      dto.package,
-      dto.customAmount
-    );
-
-    const paymentIntent = await this.stripeService.createPaymentIntent({
-      customerId: tenant.stripeCustomerId,
-      amount: price,
-      currency: 'usd',
-      metadata: {
-        tenantId,
-        type: 'credit_purchase',
-        credits: credits.toString(),
-        package: dto.package,
-      },
-    });
-
-    return {
-      clientSecret: paymentIntent.client_secret || '',
-      paymentIntentId: paymentIntent.id,
-      amount: price,
-      credits,
-      currency: 'USD',
-    };
+  async createTopUpSession(
+    @CurrentUser() user: any,
+    @Body() dto: CreateTopUpSessionDto
+  ): Promise<{ url: string; sessionId: string }> {
+    return this.walletService.createTopUpSession(user.tenantId, user.stripeCustomerId, dto);
   }
 
   @Get('transactions')
-  @ApiOperation({ summary: 'Get wallet transaction history' })
-  @ApiQuery({ name: 'type', required: false, description: 'Filter by transaction type' })
-  @ApiQuery({ name: 'startDate', required: false, description: 'Filter start date' })
-  @ApiQuery({ name: 'endDate', required: false, description: 'Filter end date' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiResponse({ status: 200, description: 'Transaction history' })
+  @ApiOperation({ summary: 'Get transaction history' })
+  @ApiResponse({ status: 200, type: TransactionListResponseDto })
   async getTransactions(
-    @CurrentTenant() tenantId: string,
-    @Query() filters: FilterTransactionsDto
-  ): Promise<{ data: WalletTransactionDto[]; total: number; page: number; limit: number }> {
-    const result = await this.walletService.getTransactionHistory(tenantId, filters);
-
-    return {
-      data: result.data.map((t) => ({
-        id: t.id,
-        type: t.type,
-        amount: Number(t.amount),
-        balanceBefore: Number(t.balanceBefore),
-        balanceAfter: Number(t.balanceAfter),
-        description: t.description || undefined,
-        referenceType: t.referenceType || undefined,
-        referenceId: t.referenceId || undefined,
-        createdAt: t.createdAt,
-        metadata: t.metadata || undefined,
-      })),
-      total: result.total,
-      page: result.page,
-      limit: result.limit,
-    };
+    @CurrentUser() user: any,
+    @Query() query: TransactionQueryDto
+  ): Promise<TransactionListResponseDto> {
+    return this.walletService.getTransactions(user.tenantId, query);
   }
 
-  @Post('check-balance')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Check if wallet has sufficient balance for an amount' })
-  @ApiResponse({ status: 200, description: 'Balance check result' })
-  async checkBalance(
-    @CurrentTenant() tenantId: string,
-    @Body() body: { amount: number }
-  ): Promise<{ sufficient: boolean; available: number; required: number }> {
-    const balance = await this.walletService.getBalance(tenantId);
-
+  @Get('balance')
+  @ApiOperation({ summary: 'Get available balance' })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      properties: {
+        balance: { type: 'number' },
+        available: { type: 'number' },
+        reserved: { type: 'number' },
+        currency: { type: 'string' },
+      },
+    },
+  })
+  async getBalance(@CurrentUser() user: any): Promise<{
+    balance: number;
+    available: number;
+    reserved: number;
+    currency: string;
+  }> {
+    const wallet = await this.walletService.getWallet(user.tenantId);
     return {
-      sufficient: balance.availableCredits >= body.amount,
-      available: balance.availableCredits,
-      required: body.amount,
+      balance: wallet.balance,
+      available: wallet.availableBalance,
+      reserved: wallet.reservedBalance,
+      currency: wallet.currency,
     };
   }
 }
