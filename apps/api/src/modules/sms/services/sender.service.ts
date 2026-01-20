@@ -241,12 +241,29 @@ export class SenderService {
       throw new ForbiddenException('You have reached the maximum number of dedicated numbers');
     }
 
-    // Check if number already exists for this tenant
-    const existingSender = await this.senderRepository.findOne({
+    // Check if number already exists for this tenant - return existing if found
+    const existingSenderForTenant = await this.senderRepository.findOne({
       where: { phoneNumber: dto.phoneNumber, tenantId },
     });
-    if (existingSender) {
-      throw new BadRequestException('This phone number is already registered for your account');
+    if (existingSenderForTenant) {
+      this.logger.log(
+        `Phone number ${dto.phoneNumber} already exists for tenant ${tenantId}, returning existing`
+      );
+      return existingSenderForTenant;
+    }
+
+    // Check if number exists for another tenant (shared trial number scenario)
+    const existingSenderGlobal = await this.senderRepository.findOne({
+      where: { phoneNumber: dto.phoneNumber },
+    });
+    if (existingSenderGlobal) {
+      // For trial/shared numbers, we can't have the same number for multiple tenants
+      // due to the unique constraint. Inform the user.
+      throw new BadRequestException(
+        'This phone number is already registered in the system. ' +
+          'Each phone number can only be registered once. ' +
+          'Please use a different number or contact support.'
+      );
     }
 
     // Determine if this should be the default
@@ -294,7 +311,7 @@ export class SenderService {
       return null;
     }
 
-    // Check if already exists
+    // Check if already exists for this tenant
     const existingSender = await this.senderRepository.findOne({
       where: { phoneNumber: trialNumber, tenantId },
     });
@@ -304,11 +321,35 @@ export class SenderService {
       return existingSender;
     }
 
-    // Add the trial number
-    return this.addExistingNumber(tenantId, {
-      phoneNumber: trialNumber,
-      friendlyName: 'Twilio Trial Number',
+    // Check if trial number already exists globally (used by another tenant)
+    const globalExisting = await this.senderRepository.findOne({
+      where: { phoneNumber: trialNumber },
     });
+
+    if (globalExisting) {
+      this.logger.warn(
+        `Trial number ${trialNumber} already registered by another tenant. ` +
+          `Cannot setup for tenant ${tenantId}. Each tenant needs their own number.`
+      );
+      return null;
+    }
+
+    // Add the trial number
+    try {
+      return await this.addExistingNumber(tenantId, {
+        phoneNumber: trialNumber,
+        friendlyName: 'Twilio Trial Number',
+      });
+    } catch (error: any) {
+      // Handle race condition where another tenant registered it
+      if (error.code === '23505') {
+        this.logger.warn(
+          `Trial number ${trialNumber} was registered by another tenant concurrently`
+        );
+        return null;
+      }
+      throw error;
+    }
   }
 
   // ============================================

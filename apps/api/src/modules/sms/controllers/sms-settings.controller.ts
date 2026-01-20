@@ -199,6 +199,79 @@ export class SmsSettingsController {
   }
 
   // ============================================
+  // International SMS
+  // ============================================
+
+  @Post('international')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Toggle international SMS (Enterprise only)',
+    description:
+      'Enable or disable international SMS sending. This feature is only available on Enterprise plan.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Updated SMS settings',
+    type: SmsSettingsResponseDto,
+  })
+  async toggleInternationalSms(
+    @CurrentTenant() tenantId: string,
+    @Body() body: { enabled: boolean }
+  ): Promise<SmsSettingsResponseDto> {
+    const settings = await this.smsSettingsService.updateSettings(tenantId, {
+      internationalSmsEnabled: body.enabled,
+    });
+    return this.toResponseDto(settings);
+  }
+
+  // ============================================
+  // Webhook Testing
+  // ============================================
+
+  @Post('webhook/test')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Test webhook delivery',
+    description:
+      'Send a test webhook payload to the configured webhook URL to verify it is working correctly.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Webhook test result',
+  })
+  async testWebhook(
+    @CurrentTenant() tenantId: string
+  ): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+    return this.smsSettingsService.testWebhook(tenantId);
+  }
+
+  // ============================================
+  // Opt-out Configuration
+  // ============================================
+
+  @Get('opt-out')
+  @ApiOperation({ summary: 'Get opt-out handling configuration' })
+  @ApiResponse({ status: 200, description: 'Opt-out configuration' })
+  async getOptOutConfig(@CurrentTenant() tenantId: string): Promise<{
+    keywords: string[];
+    autoReplyEnabled: boolean;
+    autoReplyMessage: string;
+  }> {
+    return this.smsSettingsService.getOptOutConfig(tenantId);
+  }
+
+  @Patch('opt-out')
+  @ApiOperation({ summary: 'Update opt-out handling configuration' })
+  @ApiResponse({ status: 200, description: 'Updated opt-out configuration' })
+  async updateOptOutConfig(
+    @CurrentTenant() tenantId: string,
+    @Body() body: { autoReplyEnabled?: boolean; autoReplyMessage?: string }
+  ): Promise<{ success: boolean }> {
+    await this.smsSettingsService.updateOptOutConfig(tenantId, body);
+    return { success: true };
+  }
+
+  // ============================================
   // Private Helpers
   // ============================================
 

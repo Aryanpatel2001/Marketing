@@ -97,6 +97,51 @@ export class SmsSender extends TenantSoftDeleteEntity {
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
 
+  // ============================================
+  // Compliance Fields
+  // ============================================
+
+  /**
+   * Regions where this sender is registered/compliant
+   * Used for routing and validation
+   */
+  @Column({ name: 'registered_regions', type: 'simple-array', nullable: true })
+  registeredRegions: string[] | null; // ['US', 'IN', 'EU']
+
+  /**
+   * Region-specific compliance metadata
+   */
+  @Column({ name: 'compliance_metadata', type: 'jsonb', nullable: true })
+  complianceMetadata: {
+    us?: {
+      brandId?: string;
+      campaignId?: string;
+      messagingServiceSid?: string;
+      registeredAt?: string;
+    };
+    in?: {
+      dltEntityId?: string;
+      headerId?: string;
+      registeredAt?: string;
+    };
+    eu?: {
+      registrationIds?: Record<string, string>; // { "GB": "reg123", "FR": "reg456" }
+      registeredAt?: string;
+    };
+  } | null;
+
+  /**
+   * Whether this sender has been verified for compliance
+   */
+  @Column({ name: 'compliance_verified', type: 'boolean', default: false })
+  complianceVerified: boolean;
+
+  /**
+   * Last compliance verification date
+   */
+  @Column({ name: 'compliance_verified_at', type: 'timestamp with time zone', nullable: true })
+  complianceVerifiedAt: Date | null;
+
   // Additional metadata
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
