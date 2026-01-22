@@ -1,362 +1,184 @@
 'use client';
 
-import { format } from 'date-fns';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
-  ArrowUpRight,
-  Check,
   CreditCard,
-  Download,
-  FileText,
-  History,
-  Loader2,
-  Sparkles,
   Wallet,
+  TrendingUp,
+  ArrowUpRight,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
   Zap,
 } from 'lucide-react';
-import { useState } from 'react';
-
-import { PageHeader } from '@/components/common/page-header';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BillingInterval, PlanInfo } from '@/lib/api/billing';
 import {
-  useCreateCheckout,
-  useCreatePortalSession,
-  useCreditPackages,
-  useInvoices,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
   usePlans,
-  usePurchaseCredits,
   useSubscription,
+  useWallet,
+  useUsage,
   useTransactions,
-  useWalletBalance,
+  useInvoices,
+  useCreateCheckoutSession,
+  useCreateTopUpSession,
+  useCreateBillingPortalSession,
+  useCancelSubscription,
+  useReactivateSubscription,
 } from '@/lib/hooks/use-billing';
+import type { Plan, PlanTier } from '@/lib/api/billing';
 
-// ============================================
-// Plan Card Component
-// ============================================
+function formatCurrency(amount: number, currency: string = 'USD') {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+
+function formatDate(dateString: string | null) {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
 function PlanCard({
   plan,
-  isCurrentPlan,
+  currentTier,
   onSelect,
-  isLoading,
 }: {
-  plan: PlanInfo;
-  isCurrentPlan: boolean;
-  onSelect: () => void;
-  isLoading: boolean;
-  interval?: BillingInterval;
+  plan: Plan;
+  currentTier?: PlanTier;
+  onSelect: (tier: PlanTier) => void;
 }) {
-  const priceInDollars = plan.monthlyPrice / 100;
+  const isCurrent = plan.tier === currentTier;
+  const isPopular = plan.tier === 'growth';
 
   return (
     <Card
-      className={`relative ${plan.popular ? 'border-primary shadow-lg' : ''} ${isCurrentPlan ? 'border-green-500 bg-green-50 dark:bg-green-950' : ''}`}
+      className={`relative ${isCurrent ? 'border-primary' : ''} ${isPopular ? 'border-2 border-blue-500' : ''}`}
     >
-      {plan.popular && !isCurrentPlan && (
-        <Badge className="bg-primary absolute -top-2 left-1/2 -translate-x-1/2">
-          <Sparkles className="mr-1 h-3 w-3" />
-          Most Popular
-        </Badge>
+      {isPopular && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <Badge className="bg-blue-500">Most Popular</Badge>
+        </div>
       )}
-      {isCurrentPlan && (
-        <Badge className="absolute -top-2 left-1/2 -translate-x-1/2 bg-green-600">
-          <Check className="mr-1 h-3 w-3" />
-          Current Plan
-        </Badge>
-      )}
-
-      <CardHeader className="pt-6 text-center">
-        <CardTitle className="text-xl">{plan.name}</CardTitle>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          {plan.name}
+          {isCurrent && <Badge variant="outline">Current</Badge>}
+        </CardTitle>
         <CardDescription>{plan.description}</CardDescription>
-        <div className="mt-4">
-          <span className="text-4xl font-bold">${priceInDollars}</span>
-          <span className="text-muted-foreground">/month</span>
-        </div>
       </CardHeader>
-
-      <CardContent>
-        <ul className="mb-6 space-y-3">
-          {plan.features.map((feature, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-              <span className="text-sm">{feature}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="text-muted-foreground mb-4 space-y-2 border-t pt-4 text-sm">
-          <div className="flex justify-between">
-            <span>Contacts</span>
-            <span className="font-medium">{plan.limits.maxContacts.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>SMS/month</span>
-            <span className="font-medium">
-              {plan.limits.maxSmsPerMonth === -1
-                ? 'Unlimited'
-                : plan.limits.maxSmsPerMonth.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Team members</span>
-            <span className="font-medium">{plan.limits.maxUsersPerTenant}</span>
-          </div>
+      <CardContent className="space-y-4">
+        <div className="text-3xl font-bold">
+          {plan.price === 0 ? 'Free' : `${formatCurrency(plan.price)}/mo`}
         </div>
-
+        <ul className="space-y-2 text-sm">
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {plan.smsQuota === -1 ? 'Unlimited' : plan.smsQuota.toLocaleString()} SMS/month
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {plan.emailQuota === -1 ? 'Unlimited' : plan.emailQuota.toLocaleString()} Emails/month
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {plan.whatsappQuota === -1 ? 'Unlimited' : plan.whatsappQuota.toLocaleString()}{' '}
+            WhatsApp/month
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {plan.maxContacts === -1 ? 'Unlimited' : plan.maxContacts.toLocaleString()} Contacts
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            {plan.maxSenders === -1 ? 'Unlimited' : plan.maxSenders} Senders
+          </li>
+          {plan.features.apiAccess && (
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              API Access
+            </li>
+          )}
+          {plan.features.prioritySupport && (
+            <li className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              Priority Support
+            </li>
+          )}
+        </ul>
+      </CardContent>
+      <CardFooter>
         <Button
           className="w-full"
-          variant={isCurrentPlan ? 'outline' : plan.popular ? 'default' : 'outline'}
-          onClick={onSelect}
-          disabled={isCurrentPlan || isLoading}
+          variant={isCurrent ? 'outline' : isPopular ? 'default' : 'outline'}
+          disabled={isCurrent || plan.tier === 'enterprise'}
+          onClick={() => onSelect(plan.tier)}
         >
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : isCurrentPlan ? (
-            'Current Plan'
-          ) : (
-            'Upgrade'
-          )}
+          {isCurrent ? 'Current Plan' : plan.tier === 'enterprise' ? 'Contact Sales' : 'Upgrade'}
         </Button>
-      </CardContent>
+      </CardFooter>
     </Card>
   );
 }
 
-// ============================================
-// Wallet Section Component
-// ============================================
-
-function WalletSection() {
-  const { data: balance, isLoading: balanceLoading } = useWalletBalance();
-  const { data: packages, isLoading: packagesLoading } = useCreditPackages();
-  const { data: transactions, isLoading: transactionsLoading } = useTransactions({ limit: 5 });
-  const purchaseCredits = usePurchaseCredits();
-
-  const handlePurchaseCredits = async (packageId: string) => {
-    try {
-      await purchaseCredits.mutateAsync({ packageId });
-      // The mutation will show a toast on success/error
-    } catch (error) {
-      // Error already handled by mutation
-    }
-  };
-
-  if (balanceLoading) {
-    return <Skeleton className="h-48 w-full" />;
-  }
-
-  return (
-    <div className="grid gap-6 md:grid-cols-2">
-      {/* Balance Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            SMS Credits
-          </CardTitle>
-          <CardDescription>Your current credit balance</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <div className="text-primary text-4xl font-bold">
-                {balance?.availableCredits.toLocaleString() || 0}
-              </div>
-              <p className="text-muted-foreground text-sm">Available credits</p>
-            </div>
-
-            {balance?.reservedCredits && balance.reservedCredits > 0 && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Reserved: </span>
-                <span className="font-medium">{balance.reservedCredits}</span>
-              </div>
-            )}
-
-            {balance?.isLowBalance && (
-              <div className="flex items-center gap-2 rounded-lg bg-yellow-50 p-3 dark:bg-yellow-950">
-                <Zap className="h-4 w-4 text-yellow-600" />
-                <span className="text-sm text-yellow-700 dark:text-yellow-300">
-                  Low balance! Consider buying more credits.
-                </span>
-              </div>
-            )}
-
-            <div className="pt-2">
-              <p className="text-muted-foreground mb-2 text-xs">Lifetime credits used</p>
-              <Progress value={Math.min(100, (balance?.lifetimeCredits || 0) / 100)} />
-              <p className="text-muted-foreground mt-1 text-xs">
-                {balance?.lifetimeCredits.toLocaleString() || 0} total credits used
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Credit Packages */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Buy Credits
-          </CardTitle>
-          <CardDescription>Choose a credit package</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {packagesLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {packages?.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  onClick={() => handlePurchaseCredits(pkg.id)}
-                  disabled={purchaseCredits.isPending}
-                  className="hover:bg-accent flex w-full items-center justify-between rounded-lg border p-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <div className="text-left">
-                    <div className="font-medium">{pkg.credits.toLocaleString()} Credits</div>
-                    <div className="text-muted-foreground text-sm">
-                      ${(pkg.pricePerCredit / 100).toFixed(3)}/credit
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold">${(pkg.price / 100).toFixed(2)}</div>
-                    {pkg.discountPercent > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        Save {pkg.discountPercent}%
-                      </Badge>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Transactions */}
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Recent Transactions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {transactionsLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : transactions?.data && transactions.data.length > 0 ? (
-            <div className="space-y-2">
-              {transactions.data.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="bg-muted/50 flex items-center justify-between rounded-lg p-3"
-                >
-                  <div>
-                    <div className="font-medium">{tx.description}</div>
-                    <div className="text-muted-foreground text-sm">
-                      {format(new Date(tx.createdAt), 'MMM d, yyyy h:mm a')}
-                    </div>
-                  </div>
-                  <div className={`font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {tx.amount > 0 ? '+' : ''}
-                    {tx.amount}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground py-4 text-center">No transactions yet</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ============================================
-// Invoices Section Component
-// ============================================
-
-function InvoicesSection() {
-  const { data: invoicesData, isLoading } = useInvoices({ limit: 20 });
-
-  if (isLoading) {
-    return <Skeleton className="h-48 w-full" />;
-  }
-
-  const invoices = invoicesData?.data || [];
+function UsageCard({
+  title,
+  used,
+  limit,
+  icon: Icon,
+}: {
+  title: string;
+  used: number;
+  limit: number;
+  icon: React.ElementType;
+}) {
+  const percentage = limit === -1 ? 0 : Math.min(100, (used / limit) * 100);
+  const isUnlimited = limit === -1;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Invoice History
-        </CardTitle>
-        <CardDescription>Download invoices for your records</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {invoices.length > 0 ? (
-          <div className="space-y-2">
-            {invoices.map((invoice) => (
-              <div
-                key={invoice.id}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="bg-muted rounded-lg p-2">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-medium">
-                      {invoice.invoiceNumber || `Invoice #${invoice.id.slice(0, 8)}`}
-                    </div>
-                    <div className="text-muted-foreground text-sm">
-                      {format(new Date(invoice.createdAt), 'MMM d, yyyy')}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="font-bold">${invoice.amount.toFixed(2)}</div>
-                    <Badge
-                      variant={invoice.status === 'paid' ? 'default' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {invoice.status}
-                    </Badge>
-                  </div>
-                  {invoice.invoiceUrl && (
-                    <a
-                      href={invoice.invoiceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:bg-muted rounded-lg p-2 transition-colors"
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
+      <CardContent className="pt-6">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon className="text-muted-foreground h-4 w-4" />
+            <span className="text-sm font-medium">{title}</span>
           </div>
-        ) : (
-          <p className="text-muted-foreground py-8 text-center">
-            No invoices yet. Invoices will appear here after your first payment.
+          <span className="text-muted-foreground text-sm">
+            {used.toLocaleString()} / {isUnlimited ? 'Unlimited' : limit.toLocaleString()}
+          </span>
+        </div>
+        <Progress value={percentage} className="h-2" />
+        {!isUnlimited && percentage >= 80 && (
+          <p className="mt-1 text-xs text-orange-500">
+            {percentage >= 100 ? 'Quota exceeded' : 'Approaching limit'}
           </p>
         )}
       </CardContent>
@@ -364,112 +186,687 @@ function InvoicesSection() {
   );
 }
 
-// ============================================
-// Main Billing Page
-// ============================================
-
 export default function BillingPage() {
-  const [billingInterval, setBillingInterval] = useState<BillingInterval>(BillingInterval.MONTHLY);
-  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const searchParams = useSearchParams();
+  const success = searchParams.get('success');
+  const topupSuccess = searchParams.get('topup');
+
+  const [topUpAmount, setTopUpAmount] = useState('25');
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
   const { data: plans, isLoading: plansLoading } = usePlans();
-  const createCheckout = useCreateCheckout();
-  const createPortal = useCreatePortalSession();
+  const { data: subscription, isLoading: subscriptionLoading } = useSubscription();
+  const { data: wallet, isLoading: walletLoading } = useWallet();
+  const { data: usage, isLoading: usageLoading } = useUsage();
+  const { data: transactions } = useTransactions({ limit: 5 });
+  const { data: invoices } = useInvoices(20);
 
-  const handleUpgrade = (planId: string) => {
-    createCheckout.mutate({
-      plan: planId,
-      interval: billingInterval,
-      successUrl: `${window.location.origin}/settings/billing?success=true`,
-      cancelUrl: `${window.location.origin}/settings/billing?canceled=true`,
-    });
+  const createCheckout = useCreateCheckoutSession();
+  const createTopUp = useCreateTopUpSession();
+  const openBillingPortal = useCreateBillingPortalSession();
+  const cancelSubscription = useCancelSubscription();
+  const reactivateSubscription = useReactivateSubscription();
+
+  const handleUpgrade = (planTier: PlanTier) => {
+    if (planTier !== 'free') {
+      createCheckout.mutate(planTier);
+    }
   };
 
-  const handleManageSubscription = () => {
-    createPortal.mutate(`${window.location.origin}/settings/billing`);
+  const handleTopUp = () => {
+    const amount = parseFloat(topUpAmount);
+    if (amount >= 5) {
+      createTopUp.mutate(amount);
+    }
   };
+
+  const handleCancel = () => {
+    cancelSubscription.mutate({ cancelAtPeriodEnd: true });
+    setShowCancelDialog(false);
+  };
+
+  const isLoading = plansLoading || subscriptionLoading || walletLoading || usageLoading;
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Billing & Plans"
-        description="Manage your subscription, credits, and payment methods"
-      >
-        {subscription?.stripeSubscriptionId && (
-          <Button variant="outline" onClick={handleManageSubscription}>
-            <ArrowUpRight className="mr-2 h-4 w-4" />
-            Manage Subscription
-          </Button>
-        )}
-      </PageHeader>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Billing & Usage</h1>
+        <p className="text-muted-foreground">Manage your subscription, wallet, and usage.</p>
+      </div>
 
-      <Tabs defaultValue="plans" className="space-y-6">
+      {success === 'true' && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
+          <CheckCircle2 className="h-5 w-5 text-green-600" />
+          <span className="text-green-600">Your subscription has been updated successfully!</span>
+        </div>
+      )}
+
+      {topupSuccess === 'success' && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950">
+          <CheckCircle2 className="h-5 w-5 text-green-600" />
+          <span className="text-green-600">Wallet topped up successfully!</span>
+        </div>
+      )}
+
+      <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="plans">Plans</TabsTrigger>
-          <TabsTrigger value="credits">SMS Credits</TabsTrigger>
+          <TabsTrigger value="wallet">Wallet</TabsTrigger>
+          <TabsTrigger value="usage">Usage</TabsTrigger>
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
         </TabsList>
 
-        {/* Plans Tab */}
-        <TabsContent value="plans" className="space-y-6">
-          {/* Current Subscription Info */}
-          {subscription && (
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Current Plan */}
             <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-muted-foreground text-sm">Current Plan</p>
-                    <p className="text-2xl font-bold capitalize">{subscription.plan}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-sm">Status</p>
-                    <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
-                      {subscription.status}
-                    </Badge>
-                  </div>
-                  {subscription.currentPeriodEnd && (
-                    <div>
-                      <p className="text-muted-foreground text-sm">Next billing</p>
-                      <p className="font-medium">
-                        {format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')}
-                      </p>
-                    </div>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Current Plan</CardTitle>
+                <CreditCard className="text-muted-foreground h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold capitalize">
+                  {subscription?.planName || 'Free'}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {subscription?.status === 'trialing' && (
+                    <span className="text-orange-500">
+                      Trial ends {formatDate(subscription.trialEnd)}
+                    </span>
                   )}
+                  {subscription?.status === 'active' && (
+                    <span>Renews {formatDate(subscription.currentPeriodEnd)}</span>
+                  )}
+                  {subscription?.cancelAtPeriodEnd && (
+                    <span className="text-red-500">
+                      Cancels {formatDate(subscription.currentPeriodEnd)}
+                    </span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Wallet Balance */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Wallet Balance</CardTitle>
+                <Wallet className="text-muted-foreground h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {wallet ? formatCurrency(wallet.availableBalance, wallet.currency) : '$0.00'}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {wallet && wallet.reservedBalance && wallet.reservedBalance > 0 && (
+                    <span>{formatCurrency(wallet.reservedBalance)} reserved</span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* This Month's Cost */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                <TrendingUp className="text-muted-foreground h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {usage ? formatCurrency(usage.totalCost) : '$0.00'}
+                </div>
+                <p className="text-muted-foreground text-xs">Total usage cost</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="flex flex-wrap gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button>
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Top Up Wallet
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Top Up Wallet</DialogTitle>
+                  <DialogDescription>
+                    Add funds to your wallet for pay-as-you-go messaging.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Amount (USD)</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      min="5"
+                      step="5"
+                      value={topUpAmount}
+                      onChange={(e) => setTopUpAmount(e.target.value)}
+                    />
+                    <p className="text-muted-foreground text-xs">Minimum $5.00</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {[10, 25, 50, 100].map((amount) => (
+                      <Button
+                        key={amount}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTopUpAmount(amount.toString())}
+                      >
+                        ${amount}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleTopUp} disabled={createTopUp.isPending}>
+                    {createTopUp.isPending
+                      ? 'Processing...'
+                      : `Pay ${formatCurrency(parseFloat(topUpAmount) || 0)}`}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="outline" onClick={() => openBillingPortal.mutate()}>
+              <CreditCard className="mr-2 h-4 w-4" />
+              Manage Payment Methods
+            </Button>
+
+            {subscription?.cancelAtPeriodEnd ? (
+              <Button
+                variant="outline"
+                onClick={() => reactivateSubscription.mutate()}
+                disabled={reactivateSubscription.isPending}
+              >
+                Reactivate Subscription
+              </Button>
+            ) : (
+              subscription?.status === 'active' &&
+              subscription?.planTier !== 'free' && (
+                <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" className="text-red-500 hover:text-red-600">
+                      Cancel Subscription
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Cancel Subscription</DialogTitle>
+                      <DialogDescription>
+                        Your subscription will remain active until the end of the current billing
+                        period. You can reactivate anytime before then.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+                        Keep Subscription
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={handleCancel}
+                        disabled={cancelSubscription.isPending}
+                      >
+                        {cancelSubscription.isPending ? 'Cancelling...' : 'Cancel Subscription'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )
+            )}
+          </div>
+
+          {/* Usage Summary */}
+          {usage && (
+            <div className="grid gap-4 md:grid-cols-3">
+              <UsageCard title="SMS" used={usage.sms.used} limit={usage.sms.limit} icon={Zap} />
+              <UsageCard
+                title="Email"
+                used={usage.email.used}
+                limit={usage.email.limit}
+                icon={Zap}
+              />
+              <UsageCard
+                title="WhatsApp"
+                used={usage.whatsapp.used}
+                limit={usage.whatsapp.limit}
+                icon={Zap}
+              />
+            </div>
+          )}
+
+          {/* Recent Transactions */}
+          {transactions && transactions.data.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Transactions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {transactions.data.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between border-b py-2 last:border-0"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{tx.description || tx.type}</p>
+                        <p className="text-muted-foreground text-xs">{formatDate(tx.createdAt)}</p>
+                      </div>
+                      <span
+                        className={`font-medium ${tx.type === 'credit' || tx.type === 'refund' ? 'text-green-600' : 'text-red-600'}`}
+                      >
+                        {tx.type === 'credit' || tx.type === 'refund' ? '+' : '-'}
+                        {formatCurrency(Math.abs(tx.amount))}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           )}
+        </TabsContent>
 
-          {/* Plan Cards */}
-          {plansLoading || subscriptionLoading ? (
-            <div className="grid gap-6 md:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-96 w-full" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-3">
-              {plans?.map((plan) => (
+        {/* Plans Tab */}
+        <TabsContent value="plans" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {plans
+              ?.filter((p) => p.tier !== 'enterprise')
+              .map((plan) => (
                 <PlanCard
-                  key={plan.plan}
+                  key={plan.id}
                   plan={plan}
-                  isCurrentPlan={subscription?.plan === plan.plan}
-                  onSelect={() => handleUpgrade(plan.plan)}
-                  isLoading={createCheckout.isPending}
-                  interval={BillingInterval.MONTHLY}
+                  currentTier={subscription?.planTier}
+                  onSelect={handleUpgrade}
                 />
               ))}
-            </div>
+          </div>
+          <Card className="bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+            <CardContent className="flex items-center justify-between py-6">
+              <div>
+                <h3 className="text-lg font-semibold">Enterprise</h3>
+                <p className="text-muted-foreground">Custom solutions for large organizations</p>
+              </div>
+              <Button variant="outline">Contact Sales</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Wallet Tab */}
+        <TabsContent value="wallet" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Wallet Balance</CardTitle>
+                <CardDescription>Your pay-as-you-go balance</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-4xl font-bold">
+                  {wallet ? formatCurrency(wallet.availableBalance, wallet.currency) : '$0.00'}
+                </div>
+                {wallet && wallet.reservedBalance && wallet.reservedBalance > 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    {formatCurrency(wallet.reservedBalance)} reserved for pending campaigns
+                  </p>
+                )}
+                <Separator />
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Total Credited</p>
+                    <p className="font-medium">
+                      {wallet ? formatCurrency(wallet.totalCredited) : '$0.00'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Total Used</p>
+                    <p className="font-medium">
+                      {wallet ? formatCurrency(wallet.totalDebited) : '$0.00'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="w-full">
+                      <ArrowUpRight className="mr-2 h-4 w-4" />
+                      Add Funds
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Top Up Wallet</DialogTitle>
+                      <DialogDescription>
+                        Add funds to your wallet for pay-as-you-go messaging.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="wallet-amount">Amount (USD)</Label>
+                        <Input
+                          id="wallet-amount"
+                          type="number"
+                          min="5"
+                          step="5"
+                          value={topUpAmount}
+                          onChange={(e) => setTopUpAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        {[10, 25, 50, 100].map((amount) => (
+                          <Button
+                            key={amount}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTopUpAmount(amount.toString())}
+                          >
+                            ${amount}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={handleTopUp} disabled={createTopUp.isPending}>
+                        {createTopUp.isPending
+                          ? 'Processing...'
+                          : `Pay ${formatCurrency(parseFloat(topUpAmount) || 0)}`}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Auto-Recharge</CardTitle>
+                <CardDescription>Automatically top up when balance is low</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>Status</span>
+                  <Badge variant={wallet?.autoRechargeEnabled ? 'default' : 'secondary'}>
+                    {wallet?.autoRechargeEnabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+                {wallet?.autoRechargeEnabled && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Recharge when below</span>
+                      <span>{formatCurrency(wallet.autoRechargeThreshold)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Recharge amount</span>
+                      <span>{formatCurrency(wallet.autoRechargeAmount)}</span>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => openBillingPortal.mutate()}
+                >
+                  Configure Auto-Recharge
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+
+          {/* Transaction History */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Transaction History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {transactions && transactions.data.length > 0 ? (
+                <div className="space-y-2">
+                  {transactions.data.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between border-b py-3 last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`rounded-full p-2 ${tx.type === 'credit' || tx.type === 'refund' ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}
+                        >
+                          {tx.type === 'credit' || tx.type === 'refund' ? (
+                            <ArrowUpRight className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <ArrowUpRight className="h-4 w-4 rotate-180 text-red-600" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium">{tx.description || tx.type}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {formatDate(tx.createdAt)}
+                            {tx.channel && ` \u2022 ${tx.channel.toUpperCase()}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`font-medium ${tx.type === 'credit' || tx.type === 'refund' ? 'text-green-600' : ''}`}
+                        >
+                          {tx.type === 'credit' || tx.type === 'refund' ? '+' : '-'}
+                          {formatCurrency(Math.abs(tx.amount))}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Balance: {formatCurrency(tx.balanceAfter)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground py-8 text-center">No transactions yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Usage Tab */}
+        <TabsContent value="usage" className="space-y-4">
+          {usage && (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">SMS Usage</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-2xl font-bold">
+                      {usage.sms.used.toLocaleString()} /{' '}
+                      {usage.sms.limit === -1 ? 'Unlimited' : usage.sms.limit.toLocaleString()}
+                    </div>
+                    <Progress value={usage.sms.percentUsed} className="h-2" />
+                    <div className="text-muted-foreground flex justify-between text-xs">
+                      <span>{usage.sms.remaining.toLocaleString()} remaining</span>
+                      <span>Cost: {formatCurrency(usage.sms.cost)}</span>
+                    </div>
+                    {usage.sms.overage > 0 && (
+                      <p className="text-xs text-orange-500">
+                        {usage.sms.overage.toLocaleString()} messages over quota
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Email Usage</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-2xl font-bold">
+                      {usage.email.used.toLocaleString()} /{' '}
+                      {usage.email.limit === -1 ? 'Unlimited' : usage.email.limit.toLocaleString()}
+                    </div>
+                    <Progress value={usage.email.percentUsed} className="h-2" />
+                    <div className="text-muted-foreground flex justify-between text-xs">
+                      <span>{usage.email.remaining.toLocaleString()} remaining</span>
+                      <span>Cost: {formatCurrency(usage.email.cost)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">WhatsApp Usage</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-2xl font-bold">
+                      {usage.whatsapp.used.toLocaleString()} /{' '}
+                      {usage.whatsapp.limit === -1
+                        ? 'Unlimited'
+                        : usage.whatsapp.limit.toLocaleString()}
+                    </div>
+                    <Progress value={usage.whatsapp.percentUsed} className="h-2" />
+                    <div className="text-muted-foreground flex justify-between text-xs">
+                      <span>{usage.whatsapp.remaining.toLocaleString()} remaining</span>
+                      <span>Cost: {formatCurrency(usage.whatsapp.cost)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Contacts</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-2xl font-bold">
+                      {usage.contacts.used.toLocaleString()} /{' '}
+                      {usage.contacts.limit === -1
+                        ? 'Unlimited'
+                        : usage.contacts.limit.toLocaleString()}
+                    </div>
+                    <Progress value={usage.contacts.percentUsed} className="h-2" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Campaigns This Month</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="text-2xl font-bold">
+                      {usage.campaigns.used} /{' '}
+                      {usage.campaigns.limit === -1 ? 'Unlimited' : usage.campaigns.limit}
+                    </div>
+                    <Progress value={usage.campaigns.percentUsed} className="h-2" />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Billing Period</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    <Clock className="text-muted-foreground h-5 w-5" />
+                    <div>
+                      <p className="font-medium">
+                        {formatDate(usage.periodStart)} - {formatDate(usage.periodEnd)}
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        Total cost this period: {formatCurrency(usage.totalCost)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
         </TabsContent>
 
-        {/* Credits Tab */}
-        <TabsContent value="credits">
-          <WalletSection />
-        </TabsContent>
-
         {/* Invoices Tab */}
-        <TabsContent value="invoices">
-          <InvoicesSection />
+        <TabsContent value="invoices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Invoice History</CardTitle>
+              <CardDescription>View and download your past invoices</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {invoices && invoices.data.length > 0 ? (
+                <div className="space-y-2">
+                  {invoices.data.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className="flex items-center justify-between border-b py-3 last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="bg-muted rounded-full p-2">
+                          <CreditCard className="text-muted-foreground h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{invoice.invoiceNumber}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {formatDate(invoice.createdAt)}
+                            {invoice.periodStart && invoice.periodEnd && (
+                              <span>
+                                {' '}
+                                &bull; {formatDate(invoice.periodStart)} -{' '}
+                                {formatDate(invoice.periodEnd)}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="font-medium">
+                            {formatCurrency(invoice.total, invoice.currency)}
+                          </p>
+                          <Badge
+                            variant={
+                              invoice.status === 'paid'
+                                ? 'default'
+                                : invoice.status === 'open'
+                                  ? 'secondary'
+                                  : invoice.status === 'void'
+                                    ? 'outline'
+                                    : 'destructive'
+                            }
+                          >
+                            {invoice.status}
+                          </Badge>
+                        </div>
+                        <div className="flex gap-2">
+                          {invoice.invoiceUrl && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(invoice.invoiceUrl!, '_blank')}
+                            >
+                              View
+                            </Button>
+                          )}
+                          {invoice.pdfUrl && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(invoice.pdfUrl!, '_blank')}
+                            >
+                              PDF
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground py-8 text-center">No invoices yet</p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

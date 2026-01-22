@@ -17,6 +17,11 @@ export enum TenantStatus {
   GRACE_PERIOD = 'grace_period',
 }
 
+export enum TenantRegion {
+  US = 'US',
+  EU = 'EU',
+}
+
 @Entity('tenants')
 export class Tenant extends BaseEntity {
   @Column({ type: 'varchar', length: 255 })
@@ -48,12 +53,6 @@ export class Tenant extends BaseEntity {
   @Column({ name: 'trial_ends_at', type: 'timestamp with time zone', nullable: true })
   trialEndsAt: Date | null;
 
-  @Column({ name: 'stripe_customer_id', type: 'varchar', length: 255, nullable: true })
-  stripeCustomerId: string | null;
-
-  @Column({ name: 'stripe_subscription_id', type: 'varchar', length: 255, nullable: true })
-  stripeSubscriptionId: string | null;
-
   @Column({ type: 'jsonb', nullable: true, default: {} })
   settings: Record<string, unknown>;
 
@@ -72,9 +71,16 @@ export class Tenant extends BaseEntity {
   @Column({ type: 'varchar', length: 50, nullable: true })
   timezone: string | null;
 
-  @Column({ name: 'payment_failed_at', type: 'timestamp with time zone', nullable: true })
-  paymentFailedAt: Date | null;
+  @Column({ name: 'stripe_customer_id', type: 'varchar', length: 100, nullable: true })
+  stripeCustomerId: string | null;
 
-  @Column({ name: 'failed_payment_count', type: 'int', default: 0 })
-  failedPaymentCount: number;
+  @Column({
+    type: 'enum',
+    enum: TenantRegion,
+    default: TenantRegion.US,
+  })
+  region: TenantRegion;
+
+  @Column({ name: 'phone_number', type: 'varchar', length: 50, nullable: true })
+  phoneNumber: string | null;
 }

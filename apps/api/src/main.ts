@@ -11,13 +11,14 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as express from 'express';
+import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
-    rawBody: true, // Enable raw body for Stripe webhook signature verification
+    rawBody: true, // Enable raw body for webhook signature verification
   });
 
   const configService = app.get(ConfigService);
@@ -26,6 +27,9 @@ async function bootstrap() {
 
   // Security
   app.use(helmet());
+
+  // Cookie parser for OAuth cookie handling
+  app.use(cookieParser());
 
   // CORS
   app.enableCors({
@@ -122,7 +126,6 @@ API requests are rate-limited based on your plan:
       .addTag('Campaigns', 'Campaign management endpoints')
       .addTag('Templates', 'Email template endpoints')
       .addTag('Analytics', 'Analytics and reporting endpoints')
-      .addTag('Billing', 'Billing and subscription endpoints')
       .addTag('Webhooks', 'Webhook configuration endpoints')
       .build();
 

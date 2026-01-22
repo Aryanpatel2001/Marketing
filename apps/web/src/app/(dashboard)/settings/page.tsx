@@ -18,6 +18,13 @@ export default function SettingsIndexPage({ searchParams }: Props) {
       <p className="text-muted-foreground">Manage your account and workspace settings.</p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+        <Link href="/settings/billing" className="rounded-lg border p-4 hover:shadow">
+          <h3 className="text-lg font-medium">Billing & Usage</h3>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage subscription, wallet, and usage.
+          </p>
+        </Link>
+
         <Link href="/settings/sms/senders" className="rounded-lg border p-4 hover:shadow">
           <h3 className="text-lg font-medium">Sender IDs</h3>
           <p className="text-muted-foreground mt-1 text-sm">
@@ -25,10 +32,10 @@ export default function SettingsIndexPage({ searchParams }: Props) {
           </p>
         </Link>
 
-        <Link href="/settings/billing" className="rounded-lg border p-4 hover:shadow">
-          <h3 className="text-lg font-medium">Billing</h3>
+        <Link href="/settings/sms/compliance" className="rounded-lg border p-4 hover:shadow">
+          <h3 className="text-lg font-medium">SMS Compliance</h3>
           <p className="text-muted-foreground mt-1 text-sm">
-            Manage your subscription and credits.
+            US 10DLC, India DLT, and EU GDPR settings.
           </p>
         </Link>
 

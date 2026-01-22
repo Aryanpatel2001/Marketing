@@ -65,25 +65,6 @@ export default () => ({
     apiKey: process.env.SENDGRID_API_KEY,
   },
 
-  // Stripe
-  stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY,
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    prices: {
-      starterMonthly: process.env.STRIPE_PRICE_STARTER_MONTHLY,
-      starterYearly: process.env.STRIPE_PRICE_STARTER_YEARLY,
-      growthMonthly: process.env.STRIPE_PRICE_GROWTH_MONTHLY,
-      growthYearly: process.env.STRIPE_PRICE_GROWTH_YEARLY,
-      proMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
-      proYearly: process.env.STRIPE_PRICE_PRO_YEARLY,
-      enterpriseMonthly: process.env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
-    },
-    creditPricing: {
-      pricePerCredit: parseFloat(process.env.STRIPE_PRICE_PER_CREDIT || '0.05'),
-      trialCredits: parseInt(process.env.TRIAL_CREDITS || '100', 10),
-    },
-  },
-
   // Google OAuth
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
@@ -96,5 +77,42 @@ export default () => ({
   throttle: {
     ttl: parseInt(process.env.THROTTLE_TTL || '60', 10),
     limit: parseInt(process.env.THROTTLE_LIMIT || '100', 10),
+  },
+
+  // Stripe
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    prices: {
+      starter: process.env.STRIPE_PRICE_ID_STARTER,
+      growth: process.env.STRIPE_PRICE_ID_GROWTH,
+      pro: process.env.STRIPE_PRICE_ID_PRO,
+    },
+  },
+
+  // Billing
+  billing: {
+    trialDays: parseInt(process.env.TRIAL_DAYS || '14', 10),
+    defaultCurrency: process.env.DEFAULT_CURRENCY || 'USD',
+    sms: {
+      defaultPrice: parseFloat(process.env.SMS_DEFAULT_PRICE || '0.015'),
+      prices: {
+        US: 0.0079,
+        CA: 0.0079,
+        GB: 0.04,
+        IN: 0.0065,
+        AU: 0.08,
+        DE: 0.09,
+        FR: 0.08,
+      },
+    },
+    email: {
+      defaultPrice: parseFloat(process.env.EMAIL_DEFAULT_PRICE || '0.001'),
+    },
+    whatsapp: {
+      defaultPrice: parseFloat(process.env.WHATSAPP_DEFAULT_PRICE || '0.02'),
+      conversationFee: parseFloat(process.env.WHATSAPP_CONVERSATION_FEE || '0.005'),
+    },
   },
 });

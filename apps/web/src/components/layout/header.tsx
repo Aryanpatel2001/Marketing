@@ -23,7 +23,6 @@ import { getInitials } from '@/lib/utils';
 import { useAuthStore, useUIStore } from '@/store';
 import {
   Bell,
-  CreditCard,
   HelpCircle,
   LogOut,
   Mail,
@@ -118,12 +117,6 @@ export function DashboardHeader() {
                 <Link href="/settings">
                   <User className="mr-2 h-4 w-4" />
                   Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings/billing">
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Billing
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>

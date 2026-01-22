@@ -1,3 +1,11 @@
+import { UsageChannel } from '@/modules/billing/dto/usage.dto';
+import {
+  TransactionChannel,
+  TransactionReferenceType,
+} from '@/modules/billing/entities/wallet-transaction.entity';
+import { PricingService } from '@/modules/billing/services/pricing.service';
+import { UsageService } from '@/modules/billing/services/usage.service';
+import { WalletService } from '@/modules/billing/services/wallet.service';
 import { EmailService, SendEmailOptions } from '@/providers/email/email.service';
 import {
   EmailRetryMessage,
@@ -18,6 +26,7 @@ import { CampaignEvent, EventType } from '../entities/campaign-event.entity';
 import { CampaignMessage, MessageStatus } from '../entities/campaign-message.entity';
 import { Campaign, CampaignStatus, EmailContent } from '../entities/campaign.entity';
 import { EmailTrackingService } from '../services/email-tracking.service';
+import { CampaignSendService } from '../services/campaign-send.service';
 
 /**
  * HTML escape function to prevent XSS in personalized content
@@ -55,7 +64,11 @@ export class EmailSendWorker implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     private readonly counterService: RedisCounterService,
     private readonly cacheService: RedisCacheService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly usageService: UsageService,
+    private readonly walletService: WalletService,
+    private readonly pricingService: PricingService,
+    private readonly campaignSendService: CampaignSendService
   ) {
     this.sesRateLimit = parseInt(this.configService.get<string>('SES_RATE_LIMIT', '14'), 10);
     this.logger.log(`SES rate limit configured: ${this.sesRateLimit} emails/second`);
@@ -331,6 +344,9 @@ export class EmailSendWorker implements OnModuleInit, OnModuleDestroy {
     // Increment Redis counter (still do this immediately for real-time stats)
     await this.counterService.incrSent(campaignId);
 
+    // Track billing: increment usage and potentially charge wallet
+    await this.trackBillingForMessage(tenantId, campaignId, messageId);
+
     // Log successful email send with timestamp
     this.logger.log(
       `[EMAIL SENT] Campaign: ${campaignId} | To: ${email} | MessageID: ${messageId} | SES-ID: ${externalId || 'N/A'} | Timestamp: ${sentAt.toISOString()}`
@@ -338,6 +354,56 @@ export class EmailSendWorker implements OnModuleInit, OnModuleDestroy {
 
     // Check and update campaign completion
     await this.checkCampaignCompletion(campaignId);
+  }
+
+  /**
+   * Track billing for a successfully sent email message
+   * Increments usage quota and charges wallet for overage
+   */
+  private async trackBillingForMessage(
+    tenantId: string,
+    campaignId: string,
+    messageId: string
+  ): Promise<void> {
+    try {
+      // Get email price
+      const unitPrice = this.pricingService.getEmailPrice();
+
+      // Increment usage and check if it's overage
+      const usageResult = await this.usageService.incrementUsage(
+        tenantId,
+        UsageChannel.EMAIL,
+        1, // 1 email
+        unitPrice
+      );
+
+      // If messages went over quota, debit from wallet
+      if (!usageResult.withinQuota && usageResult.overageCount > 0) {
+        const overageCost = usageResult.overageCount * unitPrice;
+
+        try {
+          await this.walletService.debit({
+            tenantId,
+            amount: overageCost,
+            channel: TransactionChannel.EMAIL,
+            description: `Email overage: ${usageResult.overageCount} email(s) for campaign ${campaignId}`,
+            referenceType: TransactionReferenceType.CAMPAIGN,
+            referenceId: campaignId,
+            messageCount: usageResult.overageCount,
+            unitPrice,
+            metadata: { messageId },
+          });
+        } catch (walletError: any) {
+          // Log wallet debit error but don't fail the message
+          this.logger.warn(
+            `[BILLING] Failed to debit wallet for tenant ${tenantId}: ${walletError.message}`
+          );
+        }
+      }
+    } catch (error: any) {
+      // Billing tracking failure should not fail message delivery
+      this.logger.error(`[BILLING] Failed to track usage for email ${messageId}: ${error.message}`);
+    }
   }
 
   /**
@@ -528,6 +594,9 @@ export class EmailSendWorker implements OnModuleInit, OnModuleDestroy {
             sentCount: stats.sent,
             failedCount: stats.failed,
           });
+
+          // Finalize billing - release reserved funds
+          await this.campaignSendService.finalizeCampaignBilling(campaignId);
 
           // Invalidate campaign cache
           this.invalidateCampaignCache(campaignId, campaign.tenantId);

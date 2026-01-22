@@ -1,4 +1,12 @@
-import { IsEmail, IsString, MinLength, MaxLength, Matches, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  MaxLength,
+  Matches,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -7,12 +15,16 @@ export class RegisterDto {
   @MaxLength(255)
   email: string;
 
-  @ApiProperty({ example: 'SecureP@ss123', description: 'User password (min 8 chars, 1 uppercase, 1 lowercase, 1 number)' })
+  @ApiProperty({
+    example: 'SecureP@ss123',
+    description: 'User password (min 8 chars, 1 uppercase, 1 lowercase, 1 number)',
+  })
   @IsString()
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   @MaxLength(100)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/, {
-    message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+    message:
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number',
   })
   password: string;
 
@@ -34,11 +46,17 @@ export class RegisterDto {
   @MaxLength(255)
   companyName?: string;
 
-  @ApiPropertyOptional({ example: '+1234567890', description: 'Phone number' })
-  @IsOptional()
+  @ApiProperty({
+    example: '+14155551234',
+    description: 'Phone number in international format (US: +1, EU: +44, +49, etc.)',
+  })
   @IsString()
+  @MinLength(10, { message: 'Phone number must be at least 10 characters' })
   @MaxLength(20)
-  phone?: string;
+  @Matches(/^\+[1-9]\d{6,14}$/, {
+    message: 'Phone number must be in international format (e.g., +14155551234)',
+  })
+  phoneNumber: string;
 
   @ApiProperty({ example: true, description: 'Accept terms and conditions' })
   @IsBoolean()

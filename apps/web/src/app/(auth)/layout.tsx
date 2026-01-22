@@ -8,15 +8,25 @@ import { LoadingSpinner } from '@/components/common';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, requiresOnboarding } = useAuthStore();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    // Only redirect to dashboard if authenticated AND not in onboarding flow
+    if (!isLoading && isAuthenticated && !requiresOnboarding) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, requiresOnboarding, router]);
 
   if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // If authenticated but requires onboarding, don't show auth layout (let the redirect happen)
+  if (isAuthenticated && requiresOnboarding) {
     return (
       <div className="flex h-screen items-center justify-center">
         <LoadingSpinner size="lg" />

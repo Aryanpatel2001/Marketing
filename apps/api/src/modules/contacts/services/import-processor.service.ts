@@ -7,6 +7,8 @@ import * as fs from 'fs';
 
 import { Contact, ContactStatus, ContactSource } from '../entities/contact.entity';
 import { ImportJob, ImportJobStatus, DuplicateHandling } from '../entities/import-job.entity';
+import { TenantsService } from '../../tenants/tenants.service';
+import { TenantRegion } from '../../tenants/entities/tenant.entity';
 
 export interface ImportProgressEvent {
   jobId: string;
@@ -17,6 +19,7 @@ export interface ImportProgressEvent {
   updatedCount: number;
   skippedCount: number;
   errorCount: number;
+  regionRejectedCount: number;
   currentBatch: number;
   totalBatches: number;
   message: string;
@@ -60,7 +63,8 @@ export class ImportProcessorService {
     @InjectRepository(ImportJob)
     private readonly importJobRepository: Repository<ImportJob>,
     private readonly dataSource: DataSource,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly tenantsService: TenantsService
   ) {}
 
   /**
@@ -71,6 +75,10 @@ export class ImportProcessorService {
     if (!job) {
       throw new Error('Import job not found');
     }
+
+    // Get tenant region for phone number filtering
+    const tenant = await this.tenantsService.findById(tenantId);
+    const tenantRegion = tenant?.region;
 
     // Update job status to processing
     job.status = ImportJobStatus.PROCESSING;
@@ -87,6 +95,7 @@ export class ImportProcessorService {
       // Process in optimized batches
       const totalBatches = Math.ceil(rows.length / this.BATCH_SIZE);
       const errors: ImportError[] = [];
+      let regionRejectedTotal = 0;
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const batchStart = batchIndex * this.BATCH_SIZE;
@@ -98,7 +107,8 @@ export class ImportProcessorService {
           batch,
           batchStart,
           job.duplicateHandling,
-          job.duplicateCheckField
+          job.duplicateCheckField,
+          tenantRegion
         );
 
         // Update job progress
@@ -107,6 +117,7 @@ export class ImportProcessorService {
         job.updatedCount += batchResult.updated;
         job.skippedCount += batchResult.skipped;
         job.errorCount += batchResult.errors.length;
+        regionRejectedTotal += batchResult.regionRejected;
         errors.push(...batchResult.errors);
 
         // Save progress every batch
@@ -117,7 +128,8 @@ export class ImportProcessorService {
           job,
           `Processing batch ${batchIndex + 1} of ${totalBatches}`,
           batchIndex + 1,
-          totalBatches
+          totalBatches,
+          regionRejectedTotal
         );
       }
 
@@ -210,9 +222,22 @@ export class ImportProcessorService {
     batch: ContactRow[],
     batchOffset: number,
     duplicateHandling: DuplicateHandling,
-    duplicateCheckField: string
-  ): Promise<{ created: number; updated: number; skipped: number; errors: ImportError[] }> {
-    const result = { created: 0, updated: 0, skipped: 0, errors: [] as ImportError[] };
+    duplicateCheckField: string,
+    tenantRegion?: TenantRegion
+  ): Promise<{
+    created: number;
+    updated: number;
+    skipped: number;
+    regionRejected: number;
+    errors: ImportError[];
+  }> {
+    const result = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      regionRejected: 0,
+      errors: [] as ImportError[],
+    };
 
     // Pre-validate batch
     const validRows: { row: ContactRow; index: number }[] = [];
@@ -220,10 +245,14 @@ export class ImportProcessorService {
       const row = batch[i];
       const rowIndex = batchOffset + i + 2; // +2 for 1-indexed and header row
 
-      const validationError = this.validateContactRow(row);
-      if (validationError) {
-        result.errors.push({ row: rowIndex, message: validationError });
-        result.skipped++;
+      const validation = this.validateContactRow(row, tenantRegion);
+      if (validation.error) {
+        result.errors.push({ row: rowIndex, message: validation.error });
+        if (validation.isRegionRejection) {
+          result.regionRejected++;
+        } else {
+          result.skipped++;
+        }
         continue;
       }
 
@@ -469,16 +498,49 @@ export class ImportProcessorService {
   /**
    * Validate contact row
    */
-  private validateContactRow(row: ContactRow): string | null {
+  private validateContactRow(
+    row: ContactRow,
+    tenantRegion?: TenantRegion
+  ): { error: string | null; isRegionRejection: boolean } {
     if (!row.email && !row.phone && !row.whatsappNumber) {
-      return 'At least one contact method (email, phone, or WhatsApp) is required';
+      return {
+        error: 'At least one contact method (email, phone, or WhatsApp) is required',
+        isRegionRejection: false,
+      };
     }
 
     if (row.email && !this.isValidEmail(row.email)) {
-      return `Invalid email format: ${row.email}`;
+      return { error: `Invalid email format: ${row.email}`, isRegionRejection: false };
     }
 
-    return null;
+    // Validate phone number region if tenant region is set
+    if (tenantRegion && row.phone) {
+      const isValidRegion = this.tenantsService.validatePhoneForRegion(row.phone, tenantRegion);
+      if (!isValidRegion) {
+        const regionName = tenantRegion === TenantRegion.US ? 'US (+1)' : 'EU';
+        return {
+          error: `Phone number ${row.phone} is not from ${regionName} region. Your account only allows ${regionName} contacts.`,
+          isRegionRejection: true,
+        };
+      }
+    }
+
+    // Also validate WhatsApp number region
+    if (tenantRegion && row.whatsappNumber) {
+      const isValidRegion = this.tenantsService.validatePhoneForRegion(
+        row.whatsappNumber,
+        tenantRegion
+      );
+      if (!isValidRegion) {
+        const regionName = tenantRegion === TenantRegion.US ? 'US (+1)' : 'EU';
+        return {
+          error: `WhatsApp number ${row.whatsappNumber} is not from ${regionName} region. Your account only allows ${regionName} contacts.`,
+          isRegionRejection: true,
+        };
+      }
+    }
+
+    return { error: null, isRegionRejection: false };
   }
 
   /**
@@ -520,7 +582,8 @@ export class ImportProcessorService {
     job: ImportJob,
     message: string,
     currentBatch?: number,
-    totalBatches?: number
+    totalBatches?: number,
+    regionRejectedCount?: number
   ): void {
     const progress = job.totalRows > 0 ? Math.round((job.processedRows / job.totalRows) * 100) : 0;
 
@@ -533,6 +596,7 @@ export class ImportProcessorService {
       updatedCount: job.updatedCount,
       skippedCount: job.skippedCount,
       errorCount: job.errorCount,
+      regionRejectedCount: regionRejectedCount || 0,
       currentBatch: currentBatch || 0,
       totalBatches: totalBatches || 0,
       message,

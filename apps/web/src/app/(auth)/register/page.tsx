@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Mail, Lock, User, Building2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Building2, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,13 @@ const registerSchema = z
     firstName: z.string().min(1, 'First name is required'),
     lastName: z.string().min(1, 'Last name is required'),
     email: z.string().email('Please enter a valid email address'),
+    phoneNumber: z
+      .string()
+      .min(10, 'Phone number must be at least 10 characters')
+      .regex(
+        /^\+[1-9]\d{6,14}$/,
+        'Phone number must be in international format (e.g., +14155551234)'
+      ),
     companyName: z.string().optional(),
     password: z
       .string()
@@ -52,6 +59,7 @@ export default function RegisterPage() {
       firstName: '',
       lastName: '',
       email: '',
+      phoneNumber: '',
       companyName: '',
       password: '',
       confirmPassword: '',
@@ -64,6 +72,7 @@ export default function RegisterPage() {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
+      phoneNumber: data.phoneNumber,
       password: data.password,
       companyName: data.companyName,
       acceptTerms: data.acceptTerms,
@@ -152,6 +161,24 @@ export default function RegisterPage() {
             {...register('email')}
           />
           {errors.email && <p className="text-destructive text-sm">{errors.email.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="phoneNumber">Phone Number</Label>
+          <Input
+            id="phoneNumber"
+            type="tel"
+            placeholder="+14155551234"
+            icon={<Phone className="h-4 w-4" />}
+            error={!!errors.phoneNumber}
+            {...register('phoneNumber')}
+          />
+          <p className="text-muted-foreground text-xs">
+            US (+1) or EU country codes only. This determines your account region.
+          </p>
+          {errors.phoneNumber && (
+            <p className="text-destructive text-sm">{errors.phoneNumber.message}</p>
+          )}
         </div>
 
         <div className="space-y-2">
